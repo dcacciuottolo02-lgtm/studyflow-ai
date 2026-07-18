@@ -135,6 +135,7 @@ export default function StudyHubPage() {
   const [volume, setVolume] = useState(1)
   const [isMuted, setIsMuted] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const hasFetchedAudioRef = useRef(false)
 
   // Flashcards state
   const [currentFlashcardIdx, setCurrentFlashcardIdx] = useState(0)
@@ -305,28 +306,39 @@ export default function StudyHubPage() {
         }
       }
 
-      // Fetch Audio Resource path from resources table
-      const { data: audioRes } = await supabase
-        .from('resources')
-        .select('file_url')
-        .eq('lecture_id', lectureId)
-        .eq('type', 'audio')
-        .maybeSingle()
+      // Fetch Audio Resource path from resources table (only once)
+      if (!hasFetchedAudioRef.current) {
+        const { data: audioRes } = await supabase
+          .from('resources')
+          .select('file_url')
+          .eq('lecture_id', lectureId)
+          .eq('type', 'audio')
+          .maybeSingle()
 
-      if (audioRes) {
-        const bucketName = 'lecture-resources'
-        const pathInsideBucket = audioRes.file_url.startsWith(`${bucketName}/`)
-          ? audioRes.file_url.substring(bucketName.length + 1)
-          : audioRes.file_url
+        if (audioRes) {
+          hasFetchedAudioRef.current = true
+          const bucketName = 'lecture-resources'
+          const pathInsideBucket = audioRes.file_url.startsWith(`${bucketName}/`)
+            ? audioRes.file_url.substring(bucketName.length + 1)
+            : audioRes.file_url
 
-        const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-          .from(bucketName)
-          .createSignedUrl(pathInsideBucket, 3600) // 1 hour validity
+          const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+            .from(bucketName)
+            .createSignedUrl(pathInsideBucket, 3600) // 1 hour validity
 
-        if (!signedUrlError && signedUrlData?.signedUrl) {
-          setAudioUrl(signedUrlData.signedUrl)
-        } else if (signedUrlError) {
-          console.error('[StudyHub] Error creating signed URL for audio:', signedUrlError)
+          if (!signedUrlError && signedUrlData?.signedUrl) {
+            try {
+              const res = await fetch(signedUrlData.signedUrl)
+              const blob = await res.blob()
+              const localUrl = URL.createObjectURL(blob)
+              setAudioUrl(localUrl)
+            } catch (fetchErr) {
+              console.error('[StudyHub] Error fetching audio blob:', fetchErr)
+              setAudioUrl(signedUrlData.signedUrl)
+            }
+          } else if (signedUrlError) {
+            console.error('[StudyHub] Error creating signed URL for audio:', signedUrlError)
+          }
         }
       }
 
@@ -367,6 +379,15 @@ export default function StudyHubPage() {
       audioRef.current.muted = isMuted
     }
   }, [volume, isMuted])
+
+  // Cleanup object URL to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (audioUrl && audioUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(audioUrl)
+      }
+    }
+  }, [audioUrl])
 
   const handlePlayPause = () => {
     if (!audioRef.current) return
