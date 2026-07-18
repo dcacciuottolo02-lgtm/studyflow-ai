@@ -412,11 +412,17 @@ export default function StudyHubPage() {
     const audio = audioRef.current
     if (!audio) return
 
+    console.log('[StudyHub-Audio] Metadata loaded. Raw duration:', audio.duration, 'DB fallback:', lecture?.duration_seconds)
+
     if (!isFinite(audio.duration) || isNaN(audio.duration)) {
       let timeoutId: any = null
       
+      console.log('[StudyHub-Audio] Duration is invalid. Running WebM seek-to-end hack...')
+
       const onTimeUpdateForDuration = () => {
+        console.log('[StudyHub-Audio] timeupdate event inside hack. audio.duration:', audio.duration, 'currentTime:', audio.currentTime)
         if (isFinite(audio.duration) && !isNaN(audio.duration)) {
+          console.log('[StudyHub-Audio] Duration hack succeeded! Final duration:', audio.duration)
           setDuration(audio.duration)
           audio.currentTime = 0
           audio.removeEventListener('timeupdate', onTimeUpdateForDuration)
@@ -425,15 +431,20 @@ export default function StudyHubPage() {
       }
       
       timeoutId = setTimeout(() => {
+        console.log('[StudyHub-Audio] Duration hack timeout hit. Cleaning up listener.')
         audio.removeEventListener('timeupdate', onTimeUpdateForDuration)
         if (lecture?.duration_seconds) {
+          console.log('[StudyHub-Audio] Fallback to DB duration:', lecture.duration_seconds)
           setDuration(lecture.duration_seconds)
+        } else {
+          console.warn('[StudyHub-Audio] No DB duration fallback available!')
         }
-      }, 1000)
+      }, 1500) // 1.5s timeout for safer fallback
 
       audio.addEventListener('timeupdate', onTimeUpdateForDuration)
       audio.currentTime = 1e10 // Seek to end to trigger duration calculation
     } else {
+      console.log('[StudyHub-Audio] Duration is valid directly from metadata:', audio.duration)
       setDuration(audio.duration)
     }
   }
