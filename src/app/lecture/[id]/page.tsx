@@ -41,6 +41,7 @@ interface Lecture {
   transcript_text: string | null
   recorded_at: string
   created_at: string
+  duration_seconds?: number | null
 }
 
 interface AIJob {
@@ -210,7 +211,7 @@ export default function StudyHubPage() {
       const { data: lectureData, error: lError } = await supabase
         .from('lectures')
         .select(`
-          id, title, status, transcript_text, recorded_at, created_at, course_id,
+          id, title, status, transcript_text, recorded_at, created_at, course_id, duration_seconds,
           courses ( name )
         `)
         .eq('id', lectureId)
@@ -236,6 +237,7 @@ export default function StudyHubPage() {
         transcript_text: lectureData.transcript_text,
         recorded_at: lectureData.recorded_at,
         created_at: lectureData.created_at,
+        duration_seconds: (lectureData as any).duration_seconds,
       })
 
       // Fetch AI jobs status
@@ -407,8 +409,32 @@ export default function StudyHubPage() {
   }
 
   const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration)
+    const audio = audioRef.current
+    if (!audio) return
+
+    if (!isFinite(audio.duration) || isNaN(audio.duration)) {
+      let timeoutId: any = null
+      
+      const onTimeUpdateForDuration = () => {
+        if (isFinite(audio.duration) && !isNaN(audio.duration)) {
+          setDuration(audio.duration)
+          audio.currentTime = 0
+          audio.removeEventListener('timeupdate', onTimeUpdateForDuration)
+          if (timeoutId) clearTimeout(timeoutId)
+        }
+      }
+      
+      timeoutId = setTimeout(() => {
+        audio.removeEventListener('timeupdate', onTimeUpdateForDuration)
+        if (lecture?.duration_seconds) {
+          setDuration(lecture.duration_seconds)
+        }
+      }, 1000)
+
+      audio.addEventListener('timeupdate', onTimeUpdateForDuration)
+      audio.currentTime = 1e10 // Seek to end to trigger duration calculation
+    } else {
+      setDuration(audio.duration)
     }
   }
 
@@ -501,6 +527,7 @@ export default function StudyHubPage() {
   }
 
   const formatTime = (secs: number) => {
+    if (isNaN(secs) || !isFinite(secs)) return '--:--'
     const h = Math.floor(secs / 3600)
     const m = Math.floor((secs % 3600) / 60)
     const s = Math.floor(secs % 60)
