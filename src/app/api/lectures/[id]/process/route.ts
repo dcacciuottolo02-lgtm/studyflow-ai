@@ -105,120 +105,152 @@ async function processLecturePipeline(
   console.log(`[AI Pipeline] Starting process for lecture ${lectureId}...`)
 
   try {
-    // 1. Get the audio resource URL
-    const { data: resource, error: resErr } = await supabase
-      .from('resources')
-      .select('file_url, file_size_bytes')
+    // Fetch all current jobs for this lecture to check which ones are queued
+    const { data: jobs, error: jobsErr } = await supabase
+      .from('ai_jobs')
+      .select('job_type, status')
       .eq('lecture_id', lectureId)
-      .eq('type', 'audio')
-      .single()
 
-    if (resErr || !resource) {
-      throw new Error(`Audio resource not found: ${resErr?.message || 'Empty data'}`)
+    if (jobsErr || !jobs) {
+      throw new Error(`Failed to fetch jobs: ${jobsErr?.message}`)
     }
 
-    // 2. Download the audio file from Supabase Storage
-    const bucketName = 'lecture-resources'
-    const pathInsideBucket = resource.file_url.startsWith(`${bucketName}/`)
-      ? resource.file_url.substring(bucketName.length + 1)
-      : resource.file_url
-
-    console.log(`[AI Pipeline] Downloading audio from storage: ${pathInsideBucket}`)
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from(bucketName)
-      .download(pathInsideBucket)
-
-    if (downloadError || !fileData) {
-      throw new Error(`Failed to download audio file: ${downloadError?.message}`)
-    }
-
-    // Convert file to Base64
-    const arrayBuffer = await fileData.arrayBuffer()
-    const base64Audio = Buffer.from(arrayBuffer).toString('base64')
-    
-    // Determine MIME type (default to audio/webm if extension is unknown)
-    const fileExtension = pathInsideBucket.split('.').pop()?.toLowerCase() || 'webm'
-    const mimeTypeMap: Record<string, string> = {
-      webm: 'audio/webm',
-      mp3: 'audio/mp3',
-      mpeg: 'audio/mpeg',
-      wav: 'audio/wav',
-      m4a: 'audio/m4a',
-    }
-    const audioMimeType = mimeTypeMap[fileExtension] || 'audio/webm'
+    const transcriptJob = jobs.find((j) => j.job_type === 'transcription')
+    const summaryJob = jobs.find((j) => j.job_type === 'summary')
+    const flashcardsJob = jobs.find((j) => j.job_type === 'flashcards')
+    const quizJob = jobs.find((j) => j.job_type === 'quiz')
 
     // Initialize Gemini API
     const genAI = new GoogleGenerativeAI(geminiApiKey)
     const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
 
+    let transcriptText = ''
+
     // =========================================================================
     // JOB 1: TRANSCRIPTION
     // =========================================================================
-    console.log(`[AI Pipeline - Job 1] Initiating transcription...`)
-    const { data: transJob, error: transJobErr } = await supabase
-      .from('ai_jobs')
-      .update({ status: 'running', started_at: new Date().toISOString() })
-      .eq('lecture_id', lectureId)
-      .eq('job_type', 'transcription')
-      .select('id')
-      .single()
+    if (transcriptJob && transcriptJob.status === 'queued') {
+      // 1. Get the audio resource URL
+      const { data: resource, error: resErr } = await supabase
+        .from('resources')
+        .select('file_url, file_size_bytes')
+        .eq('lecture_id', lectureId)
+        .eq('type', 'audio')
+        .single()
 
-    if (transJobErr || !transJob) {
-      throw new Error(`Failed to set transcription job to running: ${transJobErr?.message}`)
-    }
-
-    // Update lecture status to processing
-    await supabase.from('lectures').update({ status: 'processing' }).eq('id', lectureId)
-
-    let transcriptText = ''
-    try {
-      const transcriptionPrompt =
-        'Fornisci una trascrizione accurata, fedele e pulita del seguente file audio. Rimuovi solo i riempitivi verbali eccessivi (es. "ehm", "uhm", ripetizioni balbettate) ma mantieni intatto tutto il resto del contenuto, dei concetti e della terminologia spiegata.'
-
-      const response = await callGeminiWithRetry(
-        () => model.generateContent([
-          { text: transcriptionPrompt },
-          { inlineData: { data: base64Audio, mimeType: audioMimeType } },
-        ]),
-        { jobLabel: 'Job 1 Transcription', supabase, lectureId, jobType: 'transcription' }
-      )
-
-      transcriptText = response.response.text()
-      if (!transcriptText || transcriptText.trim().length === 0) {
-        throw new Error('Gemini returned an empty transcription.')
+      if (resErr || !resource) {
+        throw new Error(`Audio resource not found: ${resErr?.message || 'Empty data'}`)
       }
 
-      console.log(`[AI Pipeline - Job 1] Transcription completed successfully.`)
+      // 2. Download the audio file from Supabase Storage
+      const bucketName = 'lecture-resources'
+      const pathInsideBucket = resource.file_url.startsWith(`${bucketName}/`)
+        ? resource.file_url.substring(bucketName.length + 1)
+        : resource.file_url
 
-      // Save transcript text to lecture
-      const { error: saveTranscriptErr } = await supabase
+      console.log(`[AI Pipeline] Downloading audio from storage: ${pathInsideBucket}`)
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from(bucketName)
+        .download(pathInsideBucket)
+
+      if (downloadError || !fileData) {
+        throw new Error(`Failed to download audio file: ${downloadError?.message}`)
+      }
+
+      // Convert file to Base64
+      const arrayBuffer = await fileData.arrayBuffer()
+      const base64Audio = Buffer.from(arrayBuffer).toString('base64')
+      
+      // Determine MIME type
+      const fileExtension = pathInsideBucket.split('.').pop()?.toLowerCase() || 'webm'
+      const mimeTypeMap: Record<string, string> = {
+        webm: 'audio/webm',
+        mp3: 'audio/mp3',
+        mpeg: 'audio/mpeg',
+        wav: 'audio/wav',
+        m4a: 'audio/m4a',
+      }
+      const audioMimeType = mimeTypeMap[fileExtension] || 'audio/webm'
+
+      console.log(`[AI Pipeline - Job 1] Initiating transcription...`)
+      await supabase
+        .from('ai_jobs')
+        .update({ status: 'running', started_at: new Date().toISOString() })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'transcription')
+
+      // Update lecture status to processing
+      await supabase.from('lectures').update({ status: 'processing' }).eq('id', lectureId)
+
+      try {
+        const transcriptionPrompt =
+          'Fornisci una trascrizione accurata, fedele e pulita del seguente file audio. Rimuovi solo i riempitivi verbali eccessivi (es. "ehm", "uhm", ripetizioni balbettate) ma mantieni intatto tutto il resto del contenuto, dei concetti e della terminologia spiegata.'
+
+        const response = await callGeminiWithRetry(
+          () => model.generateContent([
+            { text: transcriptionPrompt },
+            { inlineData: { data: base64Audio, mimeType: audioMimeType } },
+          ]),
+          { jobLabel: 'Job 1 Transcription', supabase, lectureId, jobType: 'transcription' }
+        )
+
+        transcriptText = response.response.text()
+        if (!transcriptText || transcriptText.trim().length === 0) {
+          throw new Error('Gemini returned an empty transcription.')
+        }
+
+        console.log(`[AI Pipeline - Job 1] Transcription completed successfully.`)
+
+        // Save transcript text to lecture
+        const { error: saveTranscriptErr } = await supabase
+          .from('lectures')
+          .update({ transcript_text: transcriptText })
+          .eq('id', lectureId)
+
+        if (saveTranscriptErr) {
+          throw new Error(`Failed to save transcript to database: ${saveTranscriptErr.message}`)
+        }
+
+        // Complete transcription job
+        await supabase
+          .from('ai_jobs')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'transcription')
+
+      } catch (err: any) {
+        console.error(`[AI Pipeline - Job 1] Failed:`, err)
+        await supabase
+          .from('ai_jobs')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: err.message || 'Transcription failed',
+          })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'transcription')
+
+        await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
+        return // Halt execution since the other jobs depend on the transcript
+      }
+    } else {
+      // Transcription already completed, retrieve from lecture details
+      console.log(`[AI Pipeline] Skipping transcription, fetching existing transcript text...`)
+      
+      const { data: lectureData, error: lecErr } = await supabase
         .from('lectures')
-        .update({ transcript_text: transcriptText })
+        .select('transcript_text')
         .eq('id', lectureId)
+        .single()
 
-      if (saveTranscriptErr) {
-        throw new Error(`Failed to save transcript to database: ${saveTranscriptErr.message}`)
+      if (lecErr || !lectureData || !lectureData.transcript_text) {
+        throw new Error(`Transcript text not found: ${lecErr?.message || 'Empty transcript'}`)
       }
-
-      // Complete transcription job
-      await supabase
-        .from('ai_jobs')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('id', transJob.id)
-
-    } catch (err: any) {
-      console.error(`[AI Pipeline - Job 1] Failed:`, err)
-      await supabase
-        .from('ai_jobs')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: err.message || 'Transcription failed',
-        })
-        .eq('id', transJob.id)
-
-      await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
-      return // Halt execution since the other jobs depend on the transcript
+      
+      transcriptText = lectureData.transcript_text
+      
+      // Update lecture status to processing since we are updating other modules
+      await supabase.from('lectures').update({ status: 'processing' }).eq('id', lectureId)
     }
 
     // =========================================================================
@@ -260,28 +292,33 @@ async function processLecturePipeline(
     let flashcardsSuccess = false
     let quizSuccess = false
 
+    const shouldRunSummary = summaryJob && summaryJob.status === 'queued'
+    const shouldRunFlashcards = flashcardsJob && flashcardsJob.status === 'queued'
+    const shouldRunQuiz = quizJob && quizJob.status === 'queued'
+
     // 4.1 JOB 2: SUMMARY
-    try {
-      console.log(`[AI Pipeline - Job 2] Generating Summary...`)
-      await supabase
-        .from('ai_jobs')
-        .update({ status: 'running', started_at: new Date().toISOString() })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'summary')
+    if (shouldRunSummary) {
+      try {
+        console.log(`[AI Pipeline - Job 2] Generating Summary...`)
+        await supabase
+          .from('ai_jobs')
+          .update({ status: 'running', started_at: new Date().toISOString() })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'summary')
 
-      const summarySchema = {
-        type: 'object',
-        properties: {
-          content: { type: 'string' },
-          key_concepts: {
-            type: 'array',
-            items: { type: 'string' },
+        const summarySchema = {
+          type: 'object',
+          properties: {
+            content: { type: 'string' },
+            key_concepts: {
+              type: 'array',
+              items: { type: 'string' },
+            },
           },
-        },
-        required: ['content', 'key_concepts'],
-      }
+          required: ['content', 'key_concepts'],
+        }
 
-      const summaryPrompt = `Sei un assistente di studio universitario di alto livello. Basandoti sulla seguente trascrizione della lezione, genera un riassunto strutturato in formato Markdown contenente le seguenti sezioni:
+        const summaryPrompt = `Sei un assistente di studio universitario di alto livello. Basandoti sulla seguente trascrizione della lezione, genera un riassunto strutturato in formato Markdown contenente le seguenti sezioni:
 - **Introduction**: breve introduzione al tema della lezione.
 - **Key Concepts**: spiegazione approfondita dei concetti chiave.
 - **Important Notes**: annotazioni e dettagli importanti da ricordare.
@@ -292,92 +329,96 @@ Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo
 Trascrizione:
 "${transcriptText}"`
 
-      const sumResult = await callGeminiWithRetry(
-        () => model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: summarySchema as any,
-          },
-        }),
-        { jobLabel: 'Job 2 Summary', supabase, lectureId, jobType: 'summary' }
-      )
+        const sumResult = await callGeminiWithRetry(
+          () => model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: summarySchema as any,
+            },
+          }),
+          { jobLabel: 'Job 2 Summary', supabase, lectureId, jobType: 'summary' }
+        )
 
-      const summaryJson = JSON.parse(sumResult.response.text())
-      
-      // Save or update summary
-      const { data: existingSum } = await supabase
-        .from('summaries')
-        .select('id')
-        .eq('study_material_id', studyMaterialId)
-        .maybeSingle()
-
-      if (existingSum) {
-        await supabase
+        const summaryJson = JSON.parse(sumResult.response.text())
+        
+        // Save or update summary
+        const { data: existingSum } = await supabase
           .from('summaries')
-          .update({
+          .select('id')
+          .eq('study_material_id', studyMaterialId)
+          .maybeSingle()
+
+        if (existingSum) {
+          await supabase
+            .from('summaries')
+            .update({
+              content: summaryJson.content,
+              key_concepts: summaryJson.key_concepts,
+              version: 1,
+            })
+            .eq('id', existingSum.id)
+        } else {
+          await supabase.from('summaries').insert({
+            study_material_id: studyMaterialId,
             content: summaryJson.content,
             key_concepts: summaryJson.key_concepts,
-            version: 1,
           })
-          .eq('id', existingSum.id)
-      } else {
-        await supabase.from('summaries').insert({
-          study_material_id: studyMaterialId,
-          content: summaryJson.content,
-          key_concepts: summaryJson.key_concepts,
-        })
+        }
+
+        await supabase
+          .from('ai_jobs')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'summary')
+
+        summarySuccess = true
+        console.log(`[AI Pipeline - Job 2] Summary generated successfully.`)
+      } catch (err: any) {
+        console.error(`[AI Pipeline - Job 2] Failed:`, err)
+        await supabase
+          .from('ai_jobs')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: err.message || 'Summary generation failed',
+          })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'summary')
       }
-
-      await supabase
-        .from('ai_jobs')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'summary')
-
-      summarySuccess = true
-      console.log(`[AI Pipeline - Job 2] Summary generated successfully.`)
-    } catch (err: any) {
-      console.error(`[AI Pipeline - Job 2] Failed:`, err)
-      await supabase
-        .from('ai_jobs')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: err.message || 'Summary generation failed',
-        })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'summary')
+    } else {
+      summarySuccess = summaryJob ? summaryJob.status === 'completed' : false
     }
 
     // 4.2 JOB 3: FLASHCARDS
-    try {
-      console.log(`[AI Pipeline - Job 3] Generating Flashcards...`)
-      await supabase
-        .from('ai_jobs')
-        .update({ status: 'running', started_at: new Date().toISOString() })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'flashcards')
+    if (shouldRunFlashcards) {
+      try {
+        console.log(`[AI Pipeline - Job 3] Generating Flashcards...`)
+        await supabase
+          .from('ai_jobs')
+          .update({ status: 'running', started_at: new Date().toISOString() })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'flashcards')
 
-      const flashcardsSchema = {
-        type: 'object',
-        properties: {
-          flashcards: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                question: { type: 'string' },
-                answer: { type: 'string' },
+        const flashcardsSchema = {
+          type: 'object',
+          properties: {
+            flashcards: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  question: { type: 'string' },
+                  answer: { type: 'string' },
+                },
+                required: ['question', 'answer'],
               },
-              required: ['question', 'answer'],
             },
           },
-        },
-        required: ['flashcards'],
-      }
+          required: ['flashcards'],
+        }
 
-      const flashcardsPrompt = `Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami. Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta di alta qualità pedagogica.
+        const flashcardsPrompt = `Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami. Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta di alta qualità pedagogica.
 
 REGOLE OBBLIGATORIE PER LE FLASHCARD:
 - Ogni domanda DEVE testare la COMPRENSIONE di un concetto, una definizione, una relazione causale, un meccanismo o un'applicazione pratica.
@@ -391,95 +432,99 @@ Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo
 Trascrizione:
 "${transcriptText}"`
 
-      const fcResult = await callGeminiWithRetry(
-        () => model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: flashcardsPrompt }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: flashcardsSchema as any,
-          },
-        }),
-        { jobLabel: 'Job 3 Flashcards', supabase, lectureId, jobType: 'flashcards' }
-      )
+        const fcResult = await callGeminiWithRetry(
+          () => model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: flashcardsPrompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: flashcardsSchema as any,
+            },
+          }),
+          { jobLabel: 'Job 3 Flashcards', supabase, lectureId, jobType: 'flashcards' }
+        )
 
-      const fcJson = JSON.parse(fcResult.response.text())
+        const fcJson = JSON.parse(fcResult.response.text())
 
-      // 1. Create flashcard set
-      const { data: fcSet, error: fcSetErr } = await supabase
-        .from('flashcard_sets')
-        .insert({
-          study_material_id: studyMaterialId,
-          version: 1,
-        })
-        .select('id')
-        .single()
+        // 1. Create flashcard set
+        const { data: fcSet, error: fcSetErr } = await supabase
+          .from('flashcard_sets')
+          .insert({
+            study_material_id: studyMaterialId,
+            version: 1,
+          })
+          .select('id')
+          .single()
 
-      if (fcSetErr || !fcSet) throw new Error(`Failed to create flashcard set: ${fcSetErr?.message}`)
+        if (fcSetErr || !fcSet) throw new Error(`Failed to create flashcard set: ${fcSetErr?.message}`)
 
-      // 2. Insert flashcards
-      const flashcardsToInsert = fcJson.flashcards.map((fc: any, index: number) => ({
-        flashcard_set_id: fcSet.id,
-        question: fc.question,
-        answer: fc.answer,
-        status: 'unseen',
-        order_index: index,
-      }))
+        // 2. Insert flashcards
+        const flashcardsToInsert = fcJson.flashcards.map((fc: any, index: number) => ({
+          flashcard_set_id: fcSet.id,
+          question: fc.question,
+          answer: fc.answer,
+          status: 'unseen',
+          order_index: index,
+        }))
 
-      await supabase.from('flashcards').insert(flashcardsToInsert)
+        await supabase.from('flashcards').insert(flashcardsToInsert)
 
-      await supabase
-        .from('ai_jobs')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'flashcards')
+        await supabase
+          .from('ai_jobs')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'flashcards')
 
-      flashcardsSuccess = true
-      console.log(`[AI Pipeline - Job 3] Flashcards generated successfully.`)
-    } catch (err: any) {
-      console.error(`[AI Pipeline - Job 3] Failed:`, err)
-      await supabase
-        .from('ai_jobs')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: err.message || 'Flashcard generation failed',
-        })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'flashcards')
+        flashcardsSuccess = true
+        console.log(`[AI Pipeline - Job 3] Flashcards generated successfully.`)
+      } catch (err: any) {
+        console.error(`[AI Pipeline - Job 3] Failed:`, err)
+        await supabase
+          .from('ai_jobs')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: err.message || 'Flashcard generation failed',
+          })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'flashcards')
+      }
+    } else {
+      flashcardsSuccess = flashcardsJob ? flashcardsJob.status === 'completed' : false
     }
 
     // 4.3 JOB 4: QUIZ
-    try {
-      console.log(`[AI Pipeline - Job 4] Generating Quiz...`)
-      await supabase
-        .from('ai_jobs')
-        .update({ status: 'running', started_at: new Date().toISOString() })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'quiz')
+    if (shouldRunQuiz) {
+      try {
+        console.log(`[AI Pipeline - Job 4] Generating Quiz...`)
+        await supabase
+          .from('ai_jobs')
+          .update({ status: 'running', started_at: new Date().toISOString() })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'quiz')
 
-      const quizSchema = {
-        type: 'object',
-        properties: {
-          quiz: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                question: { type: 'string' },
-                options: {
-                  type: 'array',
-                  items: { type: 'string' },
+        const quizSchema = {
+          type: 'object',
+          properties: {
+            quiz: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  question: { type: 'string' },
+                  options: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                  correct_option_index: { type: 'integer' },
                 },
-                correct_option_index: { type: 'integer' },
+                required: ['question', 'options', 'correct_option_index'],
               },
-              required: ['question', 'options', 'correct_option_index'],
             },
           },
-        },
-        required: ['quiz'],
-      }
+          required: ['quiz'],
+        }
 
-      const quizPrompt = `Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami. Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla di alta qualità pedagogica per l'autovalutazione dello studente. Ogni domanda deve avere esattamente 4 opzioni di risposta ed un indicatore dell'indice dell'opzione corretta (da 0 a 3).
+        const quizPrompt = `Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami. Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla di alta qualità pedagogica per l'autovalutazione dello studente. Ogni domanda deve avere esattamente 4 opzioni di risposta ed un indicatore dell'indice dell'opzione corretta (da 0 a 3).
 
 REGOLE OBBLIGATORIE PER IL QUIZ:
 - Ogni domanda DEVE testare la COMPRENSIONE concettuale: definizioni, relazioni causali, meccanismi, differenze tra concetti, applicazioni pratiche.
@@ -494,75 +539,108 @@ Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo
 Trascrizione:
 "${transcriptText}"`
 
-      const quizResult = await callGeminiWithRetry(
-        () => model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: quizPrompt }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            responseSchema: quizSchema as any,
-          },
-        }),
-        { jobLabel: 'Job 4 Quiz', supabase, lectureId, jobType: 'quiz' }
-      )
+        const quizResult = await callGeminiWithRetry(
+          () => model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: quizPrompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: quizSchema as any,
+            },
+          }),
+          { jobLabel: 'Job 4 Quiz', supabase, lectureId, jobType: 'quiz' }
+        )
 
-      const quizJson = JSON.parse(quizResult.response.text())
+        const quizJson = JSON.parse(quizResult.response.text())
 
-      // 1. Create quiz set
-      const { data: qSet, error: qSetErr } = await supabase
-        .from('quiz_sets')
-        .insert({
-          study_material_id: studyMaterialId,
-          version: 1,
-        })
-        .select('id')
-        .single()
+        // 1. Create quiz set
+        const { data: qSet, error: qSetErr } = await supabase
+          .from('quiz_sets')
+          .insert({
+            study_material_id: studyMaterialId,
+            version: 1,
+          })
+          .select('id')
+          .single()
 
-      if (qSetErr || !qSet) throw new Error(`Failed to create quiz set: ${qSetErr?.message}`)
+        if (qSetErr || !qSet) throw new Error(`Failed to create quiz set: ${qSetErr?.message}`)
 
-      // 2. Insert quiz questions
-      const quizQuestionsToInsert = quizJson.quiz.map((q: any, index: number) => ({
-        quiz_set_id: qSet.id,
-        question: q.question,
-        options: q.options,
-        correct_option_index: q.correct_option_index,
-        order_index: index,
-      }))
+        // 2. Insert quiz questions
+        const quizQuestionsToInsert = quizJson.quiz.map((q: any, index: number) => ({
+          quiz_set_id: qSet.id,
+          question: q.question,
+          options: q.options,
+          correct_option_index: q.correct_option_index,
+          order_index: index,
+        }))
 
-      await supabase.from('quiz_questions').insert(quizQuestionsToInsert)
+        await supabase.from('quiz_questions').insert(quizQuestionsToInsert)
 
-      await supabase
-        .from('ai_jobs')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'quiz')
+        await supabase
+          .from('ai_jobs')
+          .update({ status: 'completed', completed_at: new Date().toISOString() })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'quiz')
 
-      quizSuccess = true
-      console.log(`[AI Pipeline - Job 4] Quiz generated successfully.`)
-    } catch (err: any) {
-      console.error(`[AI Pipeline - Job 4] Failed:`, err)
-      await supabase
-        .from('ai_jobs')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: err.message || 'Quiz generation failed',
-        })
-        .eq('lecture_id', lectureId)
-        .eq('job_type', 'quiz')
+        quizSuccess = true
+        console.log(`[AI Pipeline - Job 4] Quiz generated successfully.`)
+      } catch (err: any) {
+        console.error(`[AI Pipeline - Job 4] Failed:`, err)
+        await supabase
+          .from('ai_jobs')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+            error_message: err.message || 'Quiz generation failed',
+          })
+          .eq('lecture_id', lectureId)
+          .eq('job_type', 'quiz')
+      }
+    } else {
+      quizSuccess = quizJob ? quizJob.status === 'completed' : false
     }
 
     // =========================================================================
     // 5. UPDATE FINAL STATE
     // =========================================================================
-    let finalSMStatus: 'pending' | 'partial' | 'ready' | 'failed' = 'pending'
-    const successCount = [summarySuccess, flashcardsSuccess, quizSuccess].filter(Boolean).length
+    const { data: finalJobs, error: finalJobsErr } = await supabase
+      .from('ai_jobs')
+      .select('job_type, status')
+      .eq('lecture_id', lectureId)
 
-    if (successCount === 3) {
-      finalSMStatus = 'ready'
-    } else if (successCount > 0) {
-      finalSMStatus = 'partial'
-    } else {
+    if (finalJobsErr || !finalJobs) {
+      throw new Error(`Failed to fetch final jobs for status update: ${finalJobsErr?.message}`)
+    }
+
+    const finalJobsList = finalJobs || []
+    const activeNonTransJobs = finalJobsList.filter(
+      (j: any) => j.job_type !== 'transcription' && j.job_type !== 'embeddings'
+    )
+
+    const totalJobs = activeNonTransJobs.length
+    const completedJobs = activeNonTransJobs.filter((j: any) => j.status === 'completed').length
+
+    let finalSMStatus: 'pending' | 'partial' | 'ready' | 'failed' = 'pending'
+    let finalLectureStatus = 'completed'
+
+    const finalTransJob = finalJobsList.find((j: any) => j.job_type === 'transcription')
+    if (finalTransJob && finalTransJob.status === 'failed') {
       finalSMStatus = 'failed'
+      finalLectureStatus = 'failed'
+    } else {
+      if (totalJobs === 0) {
+        // Only transcription was requested and it succeeded
+        finalSMStatus = 'ready'
+        finalLectureStatus = 'completed'
+      } else if (completedJobs === totalJobs) {
+        finalSMStatus = 'ready'
+        finalLectureStatus = 'completed'
+      } else if (completedJobs > 0) {
+        finalSMStatus = 'partial'
+        finalLectureStatus = 'completed'
+      } else {
+        finalSMStatus = 'failed'
+        finalLectureStatus = 'failed'
+      }
     }
 
     await supabase
@@ -570,7 +648,6 @@ Trascrizione:
       .update({ status: finalSMStatus })
       .eq('id', studyMaterialId)
 
-    const finalLectureStatus = successCount > 0 ? 'completed' : 'failed'
     await supabase
       .from('lectures')
       .update({ status: finalLectureStatus })
@@ -617,29 +694,100 @@ export async function POST(
       )
     }
 
-    // Set lecture status to queued, clear old jobs, and initialize the queued jobs
-    console.log(`[Route POST] Queueing AI pipeline processing for lecture: ${lectureId}`)
+    // Parse choices from request body (or default to empty if not provided)
+    const body = await request.json().catch(() => ({}))
+    
+    let generateSummary = body.generateSummary
+    let generateFlashcards = body.generateFlashcards
+    let generateQuiz = body.generateQuiz
 
-    // Cleanup any existing ai_jobs for this lecture
-    await supabase.from('ai_jobs').delete().eq('lecture_id', lectureId)
+    const isIncremental = generateSummary !== undefined || generateFlashcards !== undefined || generateQuiz !== undefined
 
-    // Insert new jobs in 'queued' state
-    const jobTypes = ['transcription', 'summary', 'flashcards', 'quiz']
-    const jobsToInsert = jobTypes.map((type) => ({
-      lecture_id: lectureId,
-      job_type: type,
-      status: 'queued',
-    }))
+    // If not incremental (e.g. legacy or retry without body), deduce from existing jobs or default to all
+    if (!isIncremental) {
+      const { data: existingJobs } = await supabase
+        .from('ai_jobs')
+        .select('job_type')
+        .eq('lecture_id', lectureId)
 
-    const { error: queueErr } = await supabase.from('ai_jobs').insert(jobsToInsert)
-    if (queueErr) {
-      return NextResponse.json(
-        { error: `Failed to initialize jobs: ${queueErr.message}` },
-        { status: 500 }
-      )
+      if (existingJobs && existingJobs.length > 0) {
+        generateSummary = existingJobs.some((j) => j.job_type === 'summary')
+        generateFlashcards = existingJobs.some((j) => j.job_type === 'flashcards')
+        generateQuiz = existingJobs.some((j) => j.job_type === 'quiz')
+      } else {
+        // First run / fallback: all modules
+        generateSummary = true
+        generateFlashcards = true
+        generateQuiz = true
+      }
     }
 
-    // Update lecture status to 'queued'
+    // Check if transcription job is already completed
+    const { data: existingJobs } = await supabase
+      .from('ai_jobs')
+      .select('job_type, status')
+      .eq('lecture_id', lectureId)
+
+    const isTranscriptionCompleted = existingJobs?.some(
+      (j: any) => j.job_type === 'transcription' && j.status === 'completed'
+    )
+
+    console.log(
+      `[Route POST] Queueing AI pipeline processing for lecture: ${lectureId}. ` +
+      `isIncremental: ${isIncremental}, isTranscriptionCompleted: ${isTranscriptionCompleted}`
+    )
+
+    // Insert new jobs in 'queued' state
+    const jobsToInsert = []
+
+    if (!isTranscriptionCompleted) {
+      // Deleting any failed/stale transcription job first
+      await supabase.from('ai_jobs').delete().eq('lecture_id', lectureId).eq('job_type', 'transcription')
+      jobsToInsert.push({
+        lecture_id: lectureId,
+        job_type: 'transcription',
+        status: 'queued',
+      })
+    }
+
+    if (generateSummary) {
+      await supabase.from('ai_jobs').delete().eq('lecture_id', lectureId).eq('job_type', 'summary')
+      jobsToInsert.push({
+        lecture_id: lectureId,
+        job_type: 'summary',
+        status: 'queued',
+      })
+    }
+
+    if (generateFlashcards) {
+      await supabase.from('ai_jobs').delete().eq('lecture_id', lectureId).eq('job_type', 'flashcards')
+      jobsToInsert.push({
+        lecture_id: lectureId,
+        job_type: 'flashcards',
+        status: 'queued',
+      })
+    }
+
+    if (generateQuiz) {
+      await supabase.from('ai_jobs').delete().eq('lecture_id', lectureId).eq('job_type', 'quiz')
+      jobsToInsert.push({
+        lecture_id: lectureId,
+        job_type: 'quiz',
+        status: 'queued',
+      })
+    }
+
+    if (jobsToInsert.length > 0) {
+      const { error: queueErr } = await supabase.from('ai_jobs').insert(jobsToInsert)
+      if (queueErr) {
+        return NextResponse.json(
+          { error: `Failed to initialize jobs: ${queueErr.message}` },
+          { status: 500 }
+        )
+      }
+    }
+
+    // Update lecture status to 'queued' to trigger front-end polling
     const { error: lectureUpdErr } = await supabase
       .from('lectures')
       .update({ status: 'queued' })

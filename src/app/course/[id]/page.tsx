@@ -22,6 +22,7 @@ import {
   AlertCircle,
   FileAudio,
   Sparkles,
+  X,
 } from 'lucide-react'
 
 interface Course {
@@ -117,17 +118,47 @@ export default function CourseDetailPage() {
   const handleDeleteCourse = async () => {
     if (!course) return
     const confirmDelete = confirm(
-      `Sei sicuro di voler eliminare il corso "${course.name}"? Tutte le lezioni associate verranno nascoste.`
+      `Sei sicuro di voler eliminare il corso "${course.name}"? Tutte le lezioni associate verranno eliminate.`
     )
     if (!confirmDelete) return
 
     try {
       setLoading(true)
       const supabase = createClient()
-      
+      const nowStr = new Date().toISOString()
+
+      // 1. Fetch active lectures in this course
+      const { data: courseLectures } = await supabase
+        .from('lectures')
+        .select('id')
+        .eq('course_id', course.id)
+        .is('deleted_at', null)
+
+      const lectureIds = courseLectures?.map((l) => l.id) || []
+
+      if (lectureIds.length > 0) {
+        // 2. Cancel active ai_jobs for these lectures
+        await supabase
+          .from('ai_jobs')
+          .update({
+            status: 'failed',
+            error_message: 'Annullato dall\'utente',
+            completed_at: nowStr,
+          })
+          .in('lecture_id', lectureIds)
+          .in('status', ['created', 'queued', 'running', 'retrying'])
+
+        // 3. Soft-delete all lectures in this course
+        await supabase
+          .from('lectures')
+          .update({ deleted_at: nowStr })
+          .in('id', lectureIds)
+      }
+
+      // 4. Soft-delete the course itself
       const { error: deleteError } = await supabase
         .from('courses')
-        .update({ deleted_at: new Date().toISOString() })
+        .update({ deleted_at: nowStr })
         .eq('id', course.id)
 
       if (deleteError) {
@@ -136,11 +167,90 @@ export default function CourseDetailPage() {
       } else {
         router.push('/home')
       }
-    } catch {
+    } catch (err) {
+      console.error('Cascade delete course error:', err)
       setToastMessage('Errore durante l’eliminazione.')
       setToastType('error')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSoftDeleteLecture = async (lectureId: string, lectureTitle: string) => {
+    const confirmDelete = confirm(
+      `Sei sicuro di voler eliminare la lezione "${lectureTitle}"? Questa azione può essere annullata entro 30 giorni.`
+    )
+    if (!confirmDelete) return
+
+    try {
+      // Optimistic UI update
+      setLectures((prev) => prev.filter((l) => l.id !== lectureId))
+      setToastMessage('Lezione eliminata con successo.')
+      setToastType('success')
+
+      const supabase = createClient()
+      const { error: deleteError } = await supabase
+        .from('lectures')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', lectureId)
+
+      if (deleteError) {
+        // Rollback on failure
+        fetchCourseAndLectures()
+        setToastMessage('Impossibile eliminare la lezione. Riprova.')
+        setToastType('error')
+      }
+    } catch (err) {
+      console.error('Delete lecture error:', err)
+      fetchCourseAndLectures()
+      setToastMessage('Errore durante l’eliminazione.')
+      setToastType('error')
+    }
+  }
+
+  const handleCancelAndSoftDeleteLecture = async (lectureId: string, lectureTitle: string) => {
+    const confirmCancel = confirm(
+      `Sei sicuro di voler annullare e eliminare la lezione "${lectureTitle}"? Questa azione interromperà l'analisi AI in corso e sposterà la lezione nel cestino.`
+    )
+    if (!confirmCancel) return
+
+    try {
+      // Optimistic UI update
+      setLectures((prev) => prev.filter((l) => l.id !== lectureId))
+      setToastMessage('Analisi annullata e lezione eliminata.')
+      setToastType('success')
+
+      const supabase = createClient()
+      const nowStr = new Date().toISOString()
+
+      // 1. Cancel active ai_jobs
+      const { error: jobsError } = await supabase
+        .from('ai_jobs')
+        .update({
+          status: 'failed',
+          error_message: 'Annullato dall\'utente',
+          completed_at: nowStr,
+        })
+        .eq('lecture_id', lectureId)
+        .in('status', ['created', 'queued', 'running', 'retrying'])
+
+      // 2. Soft-delete the lecture
+      const { error: deleteError } = await supabase
+        .from('lectures')
+        .update({ deleted_at: nowStr, status: 'failed' })
+        .eq('id', lectureId)
+
+      if (jobsError || deleteError) {
+        console.error('Cancel and delete error:', jobsError, deleteError)
+        fetchCourseAndLectures()
+        setToastMessage('Impossibile annullare la lezione. Riprova.')
+        setToastType('error')
+      }
+    } catch (err) {
+      console.error('Cancel and delete catch error:', err)
+      fetchCourseAndLectures()
+      setToastMessage('Errore durante l’operazione.')
+      setToastType('error')
     }
   }
 
@@ -308,12 +418,14 @@ export default function CourseDetailPage() {
               /* Lectures List */
               <div className="flex flex-col gap-4">
                 {lectures.map((lecture) => (
-                  <Link
+                  <div
                     key={lecture.id}
-                    href={`/lecture/${lecture.id}`}
-                    className="group bg-white border border-slate-100 rounded-3xl p-5 shadow-soft-sm hover:shadow-soft-md hover:border-slate-200 hover:-translate-y-0.5 transition-all duration-250 flex items-center justify-between gap-4 cursor-pointer"
+                    className="group bg-white border border-slate-100 rounded-3xl p-5 shadow-soft-sm hover:shadow-soft-md hover:border-slate-200 hover:-translate-y-0.5 transition-all duration-250 flex items-center justify-between gap-4"
                   >
-                    <div className="flex items-center gap-3.5 grow overflow-hidden">
+                    <Link
+                      href={`/lecture/${lecture.id}`}
+                      className="flex items-center gap-3.5 grow overflow-hidden cursor-pointer"
+                    >
                       {/* Media Type Icon wrapper */}
                       <div className="w-11 h-11 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100/40 flex items-center justify-center text-indigo-650 group-hover:bg-brand-gradient group-hover:text-white group-hover:border-transparent transition-all duration-250 shadow-soft-sm">
                         <FileAudio className="w-5 h-5" />
@@ -336,13 +448,48 @@ export default function CourseDetailPage() {
                           ) : null}
                         </div>
                       </div>
-                    </div>
+                    </Link>
 
-                    {/* Status Indicator pill */}
-                    <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full border shrink-0 tracking-wide ${getStatusBadgeStyles(lecture.status)}`}>
-                      {getStatusLabel(lecture.status)}
-                    </span>
-                  </Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Status Indicator pill */}
+                      <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full border tracking-wide ${getStatusBadgeStyles(lecture.status)}`}>
+                        {getStatusLabel(lecture.status)}
+                      </span>
+
+                      {/* Action button */}
+                      {['queued', 'processing'].includes(lecture.status) ? (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleCancelAndSoftDeleteLecture(
+                              lecture.id,
+                              lecture.title || `Lezione del ${formatRecordedDate(lecture.recorded_at, lecture.created_at)}`
+                            )
+                          }}
+                          className="p-2 bg-rose-50 hover:bg-rose-100/80 text-rose-650 hover:text-rose-700 border border-rose-150/40 rounded-xl transition-all cursor-pointer flex items-center justify-center hover:scale-[1.03]"
+                          title="Annulla ed elimina"
+                        >
+                          <X className="w-3.5 h-3.5 stroke-[3]" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            handleSoftDeleteLecture(
+                              lecture.id,
+                              lecture.title || `Lezione del ${formatRecordedDate(lecture.recorded_at, lecture.created_at)}`
+                            )
+                          }}
+                          className="p-2 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-150/40 hover:border-rose-150/50 rounded-xl transition-all cursor-pointer flex items-center justify-center hover:scale-[1.03]"
+                          title="Elimina lezione"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

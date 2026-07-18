@@ -44,8 +44,8 @@ interface Lecture {
 }
 
 interface AIJob {
-  job_type: 'transcript' | 'summary' | 'flashcards' | 'quiz'
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'retrying'
+  job_type: 'transcript' | 'transcription' | 'summary' | 'flashcards' | 'quiz'
+  status: 'queued' | 'running' | 'processing' | 'completed' | 'failed' | 'retrying'
   error_message: string | null
 }
 
@@ -66,6 +66,47 @@ interface QuizQuestion {
   question: string
   options: string[]
   correct_option_index: number
+}
+
+interface NotRequestedPlaceholderProps {
+  moduleName: string
+  onGenerate: () => void
+  generating: boolean
+}
+
+function NotRequestedPlaceholder({ moduleName, onGenerate, generating }: NotRequestedPlaceholderProps) {
+  return (
+    <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md flex flex-col items-center gap-4 w-full">
+      <div className="w-12 h-12 bg-slate-50 text-slate-450 border border-slate-100 rounded-full flex items-center justify-center">
+        <Sparkles className="w-5 h-5 text-indigo-550 animate-pulse" />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <p className="text-sm font-extrabold text-slate-800">
+          {moduleName} non richiesto
+        </p>
+        <p className="text-xs text-slate-455 font-semibold max-w-xs mx-auto leading-relaxed">
+          Non hai selezionato la generazione di questo modulo all'inizio. Puoi generarlo adesso in pochi istanti.
+        </p>
+      </div>
+      <button
+        disabled={generating}
+        onClick={onGenerate}
+        className="mt-2 bg-brand-gradient hover:opacity-95 text-white font-extrabold px-6 py-2.5 rounded-2xl text-xs flex items-center gap-2 shadow-md shadow-indigo-100 transition-all cursor-pointer disabled:opacity-50 hover:scale-[1.01]"
+      >
+        {generating ? (
+          <>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>Generazione in corso...</span>
+          </>
+        ) : (
+          <>
+            <Sparkles className="w-3.5 h-3.5 fill-white" />
+            <span>Genera ora</span>
+          </>
+        )}
+      </button>
+    </div>
+  )
 }
 
 export default function StudyHubPage() {
@@ -108,6 +149,45 @@ export default function StudyHubPage() {
 
   // Transcript states
   const [transcriptSearch, setTranscriptSearch] = useState('')
+
+  // Generating single module status
+  const [generatingModule, setGeneratingModule] = useState<string | null>(null)
+
+  const isSummaryRequested = jobs.some((j) => j.job_type === 'summary')
+  const isFlashcardsRequested = jobs.some((j) => j.job_type === 'flashcards')
+  const isQuizRequested = jobs.some((j) => j.job_type === 'quiz')
+
+  // Trigger single module generation
+  const handleGenerateModule = async (jobType: 'summary' | 'flashcards' | 'quiz') => {
+    if (!lecture) return
+    setGeneratingModule(jobType)
+    setError(null)
+    
+    try {
+      const response = await fetch(`/api/lectures/${lecture.id}/process`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          generateSummary: jobType === 'summary',
+          generateFlashcards: jobType === 'flashcards',
+          generateQuiz: jobType === 'quiz',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Impossibile avviare la generazione del modulo.')
+      }
+
+      // Immediately fetch data to transition status and start polling
+      await fetchLectureHubData()
+    } catch (err: any) {
+      setError(err.message || 'Errore durante la generazione del modulo.')
+    } finally {
+      setGeneratingModule(null)
+    }
+  }
 
   // 1. Fetch data from Supabase
   const fetchLectureHubData = async () => {
@@ -467,8 +547,10 @@ export default function StudyHubPage() {
 
   // Job progress trackers
   const isJobActive = (jobType: 'transcript' | 'summary' | 'flashcards' | 'quiz') => {
-    const matchedJob = jobs.find((j) => j.job_type === jobType)
-    return matchedJob?.status || 'queued'
+    const dbType = jobType === 'transcript' ? 'transcription' : jobType
+    const matchedJob = jobs.find((j) => j.job_type === dbType)
+    if (!matchedJob) return 'not_requested'
+    return matchedJob.status
   }
 
   const isFailedPipeline = lecture.status === 'failed' || jobs.every((j) => j.status === 'failed')
@@ -649,13 +731,17 @@ export default function StudyHubPage() {
                             <div className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center">
                               <Check className="w-3.5 h-3.5 stroke-[3]" />
                             </div>
-                          ) : stepStatus === 'processing' || stepStatus === 'retrying' ? (
+                          ) : stepStatus === 'processing' || stepStatus === 'running' || stepStatus === 'retrying' ? (
                             <div className="w-6 h-6 rounded-full bg-indigo-650 text-white flex items-center justify-center animate-pulse">
                               <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             </div>
                           ) : stepStatus === 'failed' ? (
                             <div className="w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center">
                               <X className="w-3.5 h-3.5 stroke-[3]" />
+                            </div>
+                          ) : stepStatus === 'not_requested' ? (
+                            <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-[10px] font-bold">
+                              -
                             </div>
                           ) : (
                             <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center text-[10px] font-bold">
@@ -668,7 +754,7 @@ export default function StudyHubPage() {
                             {step.label}
                           </span>
                           <span className="text-[10px] text-slate-455 leading-relaxed font-semibold">
-                            {step.desc}
+                            {stepStatus === 'not_requested' ? 'Non richiesto' : step.desc}
                           </span>
                         </div>
                       </div>
@@ -714,7 +800,13 @@ export default function StudyHubPage() {
               {/* TAB 1: SUMMARY */}
               {activeTab === 'summary' && (
                 <div className="flex flex-col gap-6">
-              {summary ? (
+              {!isSummaryRequested ? (
+                <NotRequestedPlaceholder
+                  moduleName="Riassunto"
+                  onGenerate={() => handleGenerateModule('summary')}
+                  generating={generatingModule === 'summary'}
+                />
+              ) : summary ? (
                 <>
                   {/* Markdown Summary Content */}
                   <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-3xl shadow-soft-md text-left">
@@ -862,6 +954,12 @@ export default function StudyHubPage() {
                   </div>
 
                 </div>
+              ) : !isFlashcardsRequested ? (
+                <NotRequestedPlaceholder
+                  moduleName="Flashcard"
+                  onGenerate={() => handleGenerateModule('flashcards')}
+                  generating={generatingModule === 'flashcards'}
+                />
               ) : (
                 <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md">
                   <p className="text-sm font-semibold text-slate-500">Nessuna flashcard disponibile al momento.</p>
@@ -1055,6 +1153,12 @@ export default function StudyHubPage() {
                   })()}
 
                 </div>
+              ) : !isQuizRequested ? (
+                <NotRequestedPlaceholder
+                  moduleName="Quiz"
+                  onGenerate={() => handleGenerateModule('quiz')}
+                  generating={generatingModule === 'quiz'}
+                />
               ) : (
                 <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md">
                   <p className="text-sm font-semibold text-slate-500">Nessun quiz disponibile al momento.</p>

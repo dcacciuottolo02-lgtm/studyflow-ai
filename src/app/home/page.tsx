@@ -97,10 +97,11 @@ export default function HomePage() {
           .from('lectures')
           .select(`
             id, title, status, created_at, recorded_at, course_id,
-            courses!inner(name, color, professor, workspace_id)
+            courses!inner(name, color, professor, workspace_id, deleted_at)
           `)
           .eq('courses.workspace_id', workspace.id)
           .is('deleted_at', null)
+          .is('courses.deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(5)
 
