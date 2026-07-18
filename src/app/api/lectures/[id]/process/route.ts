@@ -1,6 +1,6 @@
 'use strict'
 
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createClient as createServerClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -653,9 +653,11 @@ export async function POST(
     }
 
     // Trigger the long-running pipeline in background and return 202 immediately to prevent timeout
-    // Vercel and local Node process continues execution in background
-    processLecturePipeline(lectureId, session.access_token, geminiApiKey).catch((err) => {
-      console.error('[Route POST] Background pipeline promise unhandled error:', err)
+    // Vercel keeps the function alive using Next.js after() API
+    after(() => {
+      processLecturePipeline(lectureId, session.access_token, geminiApiKey).catch((err) => {
+        console.error('[Route POST] Background pipeline promise unhandled error:', err)
+      })
     })
 
     return NextResponse.json(
