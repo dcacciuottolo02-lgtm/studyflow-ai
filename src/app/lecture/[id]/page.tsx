@@ -781,7 +781,9 @@ export default function StudyHubPage() {
                     { type: 'flashcards', label: '3. Flashcard', desc: 'Flashcard studio' },
                     { type: 'quiz', label: '4. Quiz', desc: 'Autovalutazione' },
                   ].map((step, idx) => {
-                    const stepStatus = isJobActive(step.type as any)
+                    const dbType = step.type === 'transcript' ? 'transcription' : step.type
+                    const matchedJob = jobs.find((j) => j.job_type === dbType)
+                    const stepStatus = matchedJob ? matchedJob.status : 'not_requested'
                     
                     return (
                       <div key={idx} className="flex sm:flex-col items-start gap-3 p-3 bg-slate-50 rounded-2xl border border-slate-150">
@@ -808,13 +810,18 @@ export default function StudyHubPage() {
                             </div>
                           )}
                         </div>
-                        <div className="flex flex-col gap-0.5 text-left">
+                        <div className="flex flex-col gap-0.5 text-left w-full">
                           <span className="text-[11px] font-extrabold text-slate-800 leading-snug">
                             {step.label}
                           </span>
                           <span className="text-[10px] text-slate-455 leading-relaxed font-semibold">
                             {stepStatus === 'not_requested' ? 'Non richiesto' : step.desc}
                           </span>
+                          {stepStatus === 'failed' && matchedJob?.error_message && (
+                            <span className="text-[9px] text-rose-600 font-bold mt-1 block break-words leading-normal bg-rose-50 border border-rose-100 rounded-lg p-1.5">
+                              Errore: {matchedJob.error_message}
+                            </span>
+                          )}
                         </div>
                       </div>
                     )
