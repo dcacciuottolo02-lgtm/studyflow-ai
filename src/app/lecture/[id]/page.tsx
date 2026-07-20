@@ -127,6 +127,7 @@ export default function StudyHubPage() {
   const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript'>('summary')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isRetrying, setIsRetrying] = useState(false)
 
   // Audio Player states & refs
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
@@ -514,7 +515,7 @@ export default function StudyHubPage() {
   // Reruns the entire AI pipeline process route on failure
   const handleRetryPipeline = async () => {
     if (!lecture) return
-    setLoading(true)
+    setIsRetrying(true)
     setError(null)
     try {
       const response = await fetch(`/api/lectures/${lecture.id}/process`, {
@@ -524,7 +525,8 @@ export default function StudyHubPage() {
       await fetchLectureHubData()
     } catch (err: any) {
       setError(err.message || 'Errore durante il riavvio della pipeline AI.')
-      setLoading(false)
+    } finally {
+      setIsRetrying(false)
     }
   }
 
@@ -665,12 +667,32 @@ export default function StudyHubPage() {
                   <span>Data Registrazione</span>
                   <span className="font-extrabold text-slate-800">{formatLectureDate(lecture.recorded_at, lecture.created_at)}</span>
                 </div>
-                <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
-                  <span>Corso</span>
-                  <span className="font-extrabold text-slate-800 truncate max-w-[140px]">{lecture.course_name}</span>
-                </div>
-              </div>
-            </div>
+                 <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
+                   <span>Corso</span>
+                   <span className="font-extrabold text-slate-800 truncate max-w-[140px]">{lecture.course_name}</span>
+                 </div>
+                 
+                 {/* Re-process button */}
+                 <div className="border-t border-slate-50 pt-3.5 mt-1">
+                   <button
+                     disabled={isRetrying || ['queued', 'processing'].includes(lecture.status)}
+                     onClick={handleRetryPipeline}
+                     className="w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold py-2.5 px-4 rounded-2xl text-xs shadow-sm hover:shadow transition-all duration-200 cursor-pointer disabled:cursor-not-allowed"
+                   >
+                     {isRetrying ? (
+                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                     ) : (
+                       <RefreshCw className="w-3.5 h-3.5" />
+                     )}
+                     <span>
+                       {['queued', 'processing'].includes(lecture.status)
+                         ? 'Elaborazione in corso...'
+                         : 'Rielabora Audio'}
+                     </span>
+                   </button>
+                 </div>
+               </div>
+             </div>
 
             {/* Custom Audio Player */}
             {audioUrl ? (
