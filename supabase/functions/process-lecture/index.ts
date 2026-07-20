@@ -273,11 +273,23 @@ async function runPipeline(
           required: ['content', 'key_concepts'],
         }
 
-        const summaryPrompt = `Sei un assistente di studio universitario di alto livello. Basandoti sulla seguente trascrizione della lezione, genera un riassunto strutturato in formato Markdown contenente le seguenti sezioni:
-- **Introduction**: breve introduzione al tema della lezione.
-- **Key Concepts**: spiegazione approfondita dei concetti chiave.
-- **Important Notes**: annotazioni e dettagli importanti da ricordare.
-- **Exam Focus**: consigli su cosa concentrarsi maggiormente in vista dell'esame.
+        const summaryPrompt = `Sei un assistente di studio universitario di livello Elite. Basandoti sulla trascrizione fornita, genera un riassunto della lezione estremamente dettagliato, accademico, ben organizzato e visivamente ordinato in formato Markdown.
+
+STRUTTURA E REGOLE DI FORMATTAZIONE RICHIESTE:
+1. **Titolo della Lezione**: Inizia con un titolo accattivante e chiaro usando l'intestazione markdown (es. '# Titolo della Lezione').
+2. **Tabella dei Contenuti / Indice**: Crea un piccolo indice testuale all'inizio per mostrare la struttura del riassunto.
+3. **Introduction**: Fornisci un'introduzione fluida, ricca di contesto ed elegante (minimo 150 parole). Usa del testo in grassetto per evidenziare le parole chiave principali.
+4. **Key Concepts (Concetti Chiave)**: Per ogni concetto chiave menzionato nella lezione:
+   - Crea una sotto-sezione con intestazione '### [Nome del Concetto]'
+   - Spiega il concetto in modo approfondito, descrivendo la sua definizione, il suo funzionamento ed eventuali esempi pratici menzionati.
+   - Utilizza elenchi puntati strutturati, tabelle di confronto (se applicabili) ed evidenziazioni grafiche.
+5. **Important Notes (Note Importanti)**: Aggiungi consigli pratici, eccezioni, formule o note di approfondimento strutturate con elenchi puntati e spiegazioni chiare.
+6. **Exam Focus (Focus Esame)**: Elenca in modo ordinato e schematico le potenziali domande d'esame, i punti critici da memorizzare e i suggerimenti strategici per superare la prova su questo argomento.
+
+REGOLE GENERALI:
+- Mantieni un tono accademico, formale ma facilmente comprensibile.
+- Evita paragrafi troppo lunghi e noiosi; usa elenchi, grassetti strategici e paragrafi distanziati per rendere la lettura riposante e piacevole.
+- Non includere placeholders o testo vuoto.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
