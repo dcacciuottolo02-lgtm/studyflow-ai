@@ -9,8 +9,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let lectureId = ''
   try {
-    const { id: lectureId } = await params
+    const resolvedParams = await params
+    lectureId = resolvedParams.id
 
     // Initialize Supabase Server Client
     const supabase = await createServerClient()
@@ -143,6 +145,24 @@ export async function POST(
 
     if (invokeErr) {
       console.error('[Route POST] Supabase Edge Function invocation failed:', invokeErr)
+
+      // Rollback lecture status to failed
+      await supabase
+        .from('lectures')
+        .update({ status: 'failed' })
+        .eq('id', lectureId)
+
+      // Set the queued jobs to failed
+      await supabase
+        .from('ai_jobs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: `Failed to trigger Edge Function: ${invokeErr.message || invokeErr}`,
+        })
+        .eq('lecture_id', lectureId)
+        .eq('status', 'queued')
+
       return NextResponse.json(
         { error: `Failed to start AI processing on Supabase: ${invokeErr.message}` },
         { status: 500 }
@@ -155,6 +175,24 @@ export async function POST(
     )
   } catch (err: any) {
     console.error('[Route POST] Fatal error:', err)
+
+    // Attempt rollback
+    try {
+      const supabase = await createServerClient()
+      await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
+      await supabase
+        .from('ai_jobs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: `Fatal server error: ${err.message}`,
+        })
+        .eq('lecture_id', lectureId)
+        .eq('status', 'queued')
+    } catch (dbErr) {
+      console.error('[Route POST] Failed to rollback status in database:', dbErr)
+    }
+
     return NextResponse.json(
       { error: err.message || 'Internal Server Error' },
       { status: 500 }

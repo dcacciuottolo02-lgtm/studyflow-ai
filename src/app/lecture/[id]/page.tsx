@@ -160,6 +160,9 @@ export default function StudyHubPage() {
   const isFlashcardsRequested = jobs.some((j) => j.job_type === 'flashcards')
   const isQuizRequested = jobs.some((j) => j.job_type === 'quiz')
 
+  const isFlashcardJobActive = jobs.some((j) => j.job_type === 'flashcards' && ['queued', 'running', 'retrying'].includes(j.status))
+  const isQuizJobActive = jobs.some((j) => j.job_type === 'quiz' && ['queued', 'running', 'retrying'].includes(j.status))
+
   // Trigger single module generation
   const handleGenerateModule = async (jobType: 'summary' | 'flashcards' | 'quiz') => {
     if (!lecture) return
@@ -167,6 +170,21 @@ export default function StudyHubPage() {
     setError(null)
     
     try {
+      // If we are regenerating/generating flashcards, reset flashcard state variables
+      if (jobType === 'flashcards') {
+        setCurrentFlashcardIdx(0)
+        setIsFlipped(false)
+      }
+      
+      // If we are regenerating/generating quiz, reset quiz state variables
+      if (jobType === 'quiz') {
+        setQuizAnswers({})
+        setIsQuizSubmitted(false)
+        setQuizScore(null)
+        setQuizFilter('all')
+        setCurrentQuizWizardStep(0)
+      }
+
       const response = await fetch(`/api/lectures/${lecture.id}/process`, {
         method: 'POST',
         headers: {
@@ -270,12 +288,15 @@ export default function StudyHubPage() {
           setSummary(summaryData as Summary)
         }
 
-        // Fetch Flashcard set first
-        const { data: fcSet } = await supabase
+        // Fetch Flashcard set first (latest version)
+        const { data: fcSets } = await supabase
           .from('flashcard_sets')
           .select('id')
           .eq('study_material_id', studyMaterial.id)
-          .maybeSingle()
+          .order('version', { ascending: false })
+          .limit(1)
+
+        const fcSet = fcSets && fcSets.length > 0 ? fcSets[0] : null
 
         if (fcSet) {
           const { data: fcData } = await supabase
@@ -289,12 +310,15 @@ export default function StudyHubPage() {
           }
         }
 
-        // Fetch Quiz set first
-        const { data: qSet } = await supabase
+        // Fetch Quiz set first (latest version)
+        const { data: qSets } = await supabase
           .from('quiz_sets')
           .select('id')
           .eq('study_material_id', studyMaterial.id)
-          .maybeSingle()
+          .order('version', { ascending: false })
+          .limit(1)
+
+        const qSet = qSets && qSets.length > 0 ? qSets[0] : null
 
         if (qSet) {
           const { data: quizData } = await supabase
@@ -943,13 +967,27 @@ export default function StudyHubPage() {
           {/* TAB 2: FLASHCARDS CAROUSEL */}
           {activeTab === 'flashcards' && (
             <div className="flex flex-col gap-6">
-              {flashcards.length > 0 ? (
+              {isFlashcardJobActive ? (
+                <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
+                  <p className="text-sm font-semibold text-slate-500">Generazione delle nuove flashcard in corso...</p>
+                </div>
+              ) : flashcards.length > 0 ? (
                 <div className="flex flex-col items-center gap-6">
                   
                   {/* Progress Indicator */}
                   <div className="flex justify-between items-center w-full max-w-sm px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     <span>Mazzo Flashcard</span>
-                    <span>{currentFlashcardIdx + 1} di {flashcards.length}</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleGenerateModule('flashcards')}
+                        className="text-indigo-650 hover:underline flex items-center gap-1 cursor-pointer normal-case"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>Genera Nuove</span>
+                      </button>
+                      <span>{currentFlashcardIdx + 1} di {flashcards.length}</span>
+                    </div>
                   </div>
 
                   {/* 3D Flashcard flip container */}
@@ -1059,8 +1097,25 @@ export default function StudyHubPage() {
           {/* TAB 3: QUIZ INTERACTIVE */}
           {activeTab === 'quiz' && (
             <div className="flex flex-col gap-6">
-              {quizQuestions.length > 0 ? (
+              {isQuizJobActive ? (
+                <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
+                  <p className="text-sm font-semibold text-slate-500">Generazione del nuovo quiz in corso...</p>
+                </div>
+              ) : quizQuestions.length > 0 ? (
                 <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-3xl shadow-soft-md text-left">
+                  
+                  {/* Quiz header with refresh button */}
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
+                    <h3 className="font-extrabold text-sm text-slate-700">Quiz di Autovalutazione</h3>
+                    <button
+                      onClick={() => handleGenerateModule('quiz')}
+                      className="text-xs font-bold text-indigo-650 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Genera Nuovo Quiz</span>
+                    </button>
+                  </div>
                   
                   {/* Scoreboard block after submission */}
                   {isQuizSubmitted && quizScore !== null && (
@@ -1072,21 +1127,30 @@ export default function StudyHubPage() {
                           {quizScore} / {quizQuestions.length} Corrette
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 mt-2 w-full max-w-xs">
+                      <div className="flex flex-col gap-2 mt-2 w-full max-w-xs">
+                        <div className="flex items-center gap-2 w-full">
+                          <button
+                            onClick={handleResetQuiz}
+                            className="w-1/2 bg-white border border-slate-250 text-slate-700 font-extrabold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-soft-sm"
+                          >
+                            Rifai il Quiz
+                          </button>
+                          <button
+                            onClick={() => {
+                              setQuizFilter('mistakes')
+                              setCurrentQuizWizardStep(0)
+                            }}
+                            className="w-1/2 bg-brand-gradient hover-bg-brand-gradient text-white font-extrabold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-md shadow-indigo-100"
+                          >
+                            Rivedi Errori
+                          </button>
+                        </div>
                         <button
-                          onClick={handleResetQuiz}
-                          className="w-1/2 bg-white border border-slate-250 text-slate-700 font-extrabold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-soft-sm"
+                          onClick={() => handleGenerateModule('quiz')}
+                          className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-2.5 px-3 rounded-xl text-xs cursor-pointer shadow-sm hover:shadow flex items-center justify-center gap-1"
                         >
-                          Rifai il Quiz
-                        </button>
-                        <button
-                          onClick={() => {
-                            setQuizFilter('mistakes')
-                            setCurrentQuizWizardStep(0)
-                          }}
-                          className="w-1/2 bg-brand-gradient hover-bg-brand-gradient text-white font-extrabold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-md shadow-indigo-100"
-                        >
-                          Rivedi Errori
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Genera Nuovo Quiz</span>
                         </button>
                       </div>
                     </div>

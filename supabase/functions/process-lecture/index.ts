@@ -100,7 +100,7 @@ async function runPipeline(
     const quizJob = jobs.find((j) => j.job_type === 'quiz')
 
     const genAI = new GoogleGenerativeAI(geminiApiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' })
 
     let transcriptText = ''
 
@@ -404,11 +404,21 @@ Trascrizione:
         )
 
         const fcJson = JSON.parse(fcResult.response.text())
+        // Get the latest version number
+        const { data: existingSets } = await supabase
+          .from('flashcard_sets')
+          .select('version')
+          .eq('study_material_id', studyMaterialId)
+          .order('version', { ascending: false })
+          .limit(1)
+
+        const nextVersion = existingSets && existingSets.length > 0 ? existingSets[0].version + 1 : 1
+
         const { data: fcSet, error: fcSetErr } = await supabase
           .from('flashcard_sets')
           .insert({
             study_material_id: studyMaterialId,
-            version: 1,
+            version: nextVersion,
           })
           .select('id')
           .single()
@@ -503,11 +513,21 @@ Trascrizione:
         )
 
         const quizJson = JSON.parse(quizResult.response.text())
+        // Get the latest version number
+        const { data: existingQuizSets } = await supabase
+          .from('quiz_sets')
+          .select('version')
+          .eq('study_material_id', studyMaterialId)
+          .order('version', { ascending: false })
+          .limit(1)
+
+        const nextQuizVersion = existingQuizSets && existingQuizSets.length > 0 ? existingQuizSets[0].version + 1 : 1
+
         const { data: qSet, error: qSetErr } = await supabase
           .from('quiz_sets')
           .insert({
             study_material_id: studyMaterialId,
-            version: 1,
+            version: nextQuizVersion,
           })
           .select('id')
           .single()
