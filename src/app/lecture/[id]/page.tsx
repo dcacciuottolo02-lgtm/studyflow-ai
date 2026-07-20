@@ -975,19 +975,18 @@ export default function StudyHubPage() {
               ) : flashcards.length > 0 ? (
                 <div className="flex flex-col items-center gap-6">
                   
-                  {/* Progress Indicator */}
-                  <div className="flex justify-between items-center w-full max-w-sm px-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    <span>Mazzo Flashcard</span>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => handleGenerateModule('flashcards')}
-                        className="text-indigo-650 hover:underline flex items-center gap-1 cursor-pointer normal-case"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        <span>Genera Nuove</span>
-                      </button>
-                      <span>{currentFlashcardIdx + 1} di {flashcards.length}</span>
-                    </div>
+                  {/* Header & Regeneration action */}
+                  <div className="flex justify-between items-center w-full max-w-sm px-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      Flashcard {currentFlashcardIdx + 1} di {flashcards.length}
+                    </span>
+                    <button
+                      onClick={() => handleGenerateModule('flashcards')}
+                      className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100/50 py-1.5 px-3 rounded-xl transition-all duration-200 cursor-pointer shadow-soft-sm hover:scale-[1.01]"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>Genera Nuove</span>
+                    </button>
                   </div>
 
                   {/* 3D Flashcard flip container */}
