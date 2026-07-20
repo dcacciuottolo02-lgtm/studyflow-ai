@@ -68,7 +68,8 @@ async function runPipeline(
   accessToken: string,
   generateSummary: boolean,
   generateFlashcards: boolean,
-  generateQuiz: boolean
+  generateQuiz: boolean,
+  contentLanguage: string
 ) {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!
   const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!
@@ -261,19 +262,30 @@ async function runPipeline(
           .eq('lecture_id', lectureId)
           .eq('job_type', 'summary')
 
+        const targetLangLabel = contentLanguage === 'it' ? 'Italian (italiano)' : 'English (inglese)'
+
         const summarySchema = {
           type: 'object',
           properties: {
-            content: { type: 'string' },
+            content: { 
+              type: 'string', 
+              description: `Detailed study summary formatted in Markdown, written entirely in ${targetLangLabel}.` 
+            },
             key_concepts: {
               type: 'array',
-              items: { type: 'string' },
+              items: { 
+                type: 'string', 
+                description: `A key concept or term from the lecture, written entirely in ${targetLangLabel}.` 
+              },
             },
           },
           required: ['content', 'key_concepts'],
         }
 
-        const summaryPrompt = `Sei un assistente di studio universitario di livello Elite. Basandoti sulla trascrizione fornita, genera un riassunto della lezione estremamente dettagliato, accademico, ben organizzato e visivamente ordinato in formato Markdown.
+        const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite.
+IMPORTANTE: Genera il riassunto dell'intera lezione ed i relativi concetti chiave esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+
+Basandoti sulla trascrizione fornita, genera un riassunto della lezione estremamente dettagliato, accademico, ben organizzato e visivamente ordinato in formato Markdown.
 
 STRUTTURA E REGOLE DI FORMATTAZIONE RICHIESTE:
 1. **Titolo della Lezione**: Inizia con un titolo accattivante e chiaro usando l'intestazione markdown (es. '# Titolo della Lezione').
@@ -368,8 +380,14 @@ Trascrizione:
               items: {
                 type: 'object',
                 properties: {
-                  question: { type: 'string' },
-                  answer: { type: 'string' },
+                  question: { 
+                    type: 'string', 
+                    description: `The study question written entirely in ${targetLangLabel}.` 
+                  },
+                  answer: { 
+                    type: 'string', 
+                    description: `The clear and concise answer written entirely in ${targetLangLabel}.` 
+                  },
                 },
                 required: ['question', 'answer'],
               },
@@ -378,7 +396,10 @@ Trascrizione:
           required: ['flashcards'],
         }
 
-        const flashcardsPrompt = `Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami. Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta di alta qualità pedagogica.
+        const flashcardsPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
+IMPORTANTE: Genera tutte le domande e le risposte delle flashcard esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+
+Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta di alta qualità pedagogica.
 
 REGOLE OBBLIGATORIE PER LE FLASHCARD:
 - Ogni domanda DEVE testare la COMPRENSIONE di un concetto, una definizione, una relazione causale, un meccanismo o un'applicazione pratica.
@@ -472,10 +493,16 @@ Trascrizione:
               items: {
                 type: 'object',
                 properties: {
-                  question: { type: 'string' },
+                  question: { 
+                    type: 'string', 
+                    description: `The quiz question written entirely in ${targetLangLabel}.` 
+                  },
                   options: {
                     type: 'array',
-                    items: { type: 'string' },
+                    items: { 
+                      type: 'string', 
+                      description: `Answer option written entirely in ${targetLangLabel}.` 
+                    },
                   },
                   correct_option_index: { type: 'integer' },
                 },
@@ -486,7 +513,10 @@ Trascrizione:
           required: ['quiz'],
         }
 
-        const quizPrompt = `Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami. Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla di alta qualità pedagogica per l'autovalutazione dello studente. Ogni domanda deve avere esattamente 4 opzioni di risposta ed un indicatore dell'indice dell'opzione corretta (da 0 a 3).
+        const quizPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
+IMPORTANTE: Genera tutte le domande e le opzioni di risposta del quiz esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+
+Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla di alta qualità pedagogica per l'autovalutazione dello studente. Ogni domanda deve avere esattamente 4 opzioni di risposta ed un indicatore dell'indice dell'opzione corretta (da 0 a 3).
 
 REGOLE OBBLIGATORIE PER IL QUIZ:
 - Ogni domanda DEVE testare la COMPRENSIONE concettuale: definizioni, relazioni causali, meccanismi, differenze tra concetti, applicazioni pratiche.
@@ -638,7 +668,7 @@ Deno.serve(async (req) => {
 
     const token = authHeader.replace('Bearer ', '').trim()
 
-    const { lectureId, generateSummary, generateFlashcards, generateQuiz } = await req.json()
+    const { lectureId, generateSummary, generateFlashcards, generateQuiz, contentLanguage } = await req.json()
     if (!lectureId) {
       return new Response(JSON.stringify({ error: 'Missing lectureId in request body' }), {
         status: 400,
@@ -653,7 +683,8 @@ Deno.serve(async (req) => {
         token,
         !!generateSummary,
         !!generateFlashcards,
-        !!generateQuiz
+        !!generateQuiz,
+        contentLanguage || 'it'
       )
     )
 

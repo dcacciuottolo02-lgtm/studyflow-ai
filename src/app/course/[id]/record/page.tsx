@@ -41,6 +41,14 @@ function RecordLectureContent() {
   const [generateSummary, setGenerateSummary] = useState(true)
   const [generateFlashcards, setGenerateFlashcards] = useState(true)
   const [generateQuiz, setGenerateQuiz] = useState(true)
+  const [contentLanguage, setContentLanguage] = useState<'it' | 'en'>('it')
+
+  useEffect(() => {
+    if (language === 'it' || language === 'en') {
+      setContentLanguage(language)
+    }
+  }, [language])
+
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadStatusText, setUploadStatusText] = useState('')
@@ -402,6 +410,7 @@ function RecordLectureContent() {
           generateSummary,
           generateFlashcards,
           generateQuiz,
+          contentLanguage,
         }),
       })
 
@@ -610,6 +619,31 @@ function RecordLectureContent() {
               <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">{t('record.form.quizDesc')}</span>
             </div>
           </label>
+        </div>
+
+        {/* Content Language Selector */}
+        <div className="flex flex-col gap-1.5 border-t border-slate-100 pt-4.5">
+          <label className="text-[10px] font-extrabold text-slate-455 uppercase tracking-widest flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+            <span>{t('record.form.label.contentLanguage')}</span>
+          </label>
+          <div className="relative">
+            <select
+              value={contentLanguage}
+              disabled={recordingState !== 'idle' || uploading}
+              onChange={(e) => setContentLanguage(e.target.value as 'it' | 'en')}
+              className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-2xl text-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all duration-200 font-bold disabled:opacity-60 disabled:cursor-not-allowed appearance-none cursor-pointer"
+            >
+              <option value="it">🇮🇹 {t('record.language.it')}</option>
+              <option value="en">🇬🇧 {t('record.language.en')}</option>
+            </select>
+            {/* Custom select arrow */}
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+              <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
 

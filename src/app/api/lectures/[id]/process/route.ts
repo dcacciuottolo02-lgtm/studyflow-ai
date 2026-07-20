@@ -35,6 +35,10 @@ export async function POST(
     let generateSummary = body.generateSummary
     let generateFlashcards = body.generateFlashcards
     let generateQuiz = body.generateQuiz
+    let contentLanguage = body.contentLanguage
+    if (contentLanguage !== 'it' && contentLanguage !== 'en') {
+      contentLanguage = 'it'
+    }
 
     const isIncremental = generateSummary !== undefined || generateFlashcards !== undefined || generateQuiz !== undefined
 
@@ -123,7 +127,7 @@ export async function POST(
     // Update lecture status to 'queued' to trigger front-end polling
     const { error: lectureUpdErr } = await supabase
       .from('lectures')
-      .update({ status: 'queued' })
+      .update({ status: 'queued', content_language: contentLanguage })
       .eq('id', lectureId)
 
     if (lectureUpdErr) {
@@ -140,6 +144,7 @@ export async function POST(
         generateSummary,
         generateFlashcards,
         generateQuiz,
+        contentLanguage,
       },
     })
 
