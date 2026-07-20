@@ -10,6 +10,7 @@ import CourseModal from '@/components/CourseModal'
 import BottomNav from '@/components/BottomNav'
 import Toast from '@/components/Toast'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
+import { useLanguage } from '@/contexts/LanguageContext'
 import {
   ArrowLeft,
   MoreVertical,
@@ -46,6 +47,7 @@ export default function CourseDetailPage() {
   const params = useParams()
   const router = useRouter()
   const courseId = params.id as string
+  const { t, language } = useLanguage()
 
   const [course, setCourse] = useState<Course | null>(null)
   const [lectures, setLectures] = useState<Lecture[]>([])
@@ -80,7 +82,7 @@ export default function CourseDetailPage() {
         .maybeSingle()
 
       if (courseFetchError || !courseData) {
-        setError('Corso non trovato o eliminato.')
+        setError(t('course.error.notFound'))
         setLoading(false)
         return
       }
@@ -103,7 +105,7 @@ export default function CourseDetailPage() {
       const usageStatus = await checkUsageStatus()
       setUsage(usageStatus)
     } catch {
-      setError('Si è verificato un errore durante il caricamento dei dati.')
+      setError(t('course.error.loading'))
     } finally {
       setLoading(false)
     }
@@ -118,7 +120,7 @@ export default function CourseDetailPage() {
   const handleDeleteCourse = async () => {
     if (!course) return
     const confirmDelete = confirm(
-      `Sei sicuro di voler eliminare il corso "${course.name}"? Tutte le lezioni associate verranno eliminate.`
+      t('course.confirm.deleteCourse', { name: course.name })
     )
     if (!confirmDelete) return
 
@@ -162,14 +164,14 @@ export default function CourseDetailPage() {
         .eq('id', course.id)
 
       if (deleteError) {
-        setToastMessage('Impossibile eliminare il corso. Riprova.')
+        setToastMessage(t('course.toast.deleteCourseError'))
         setToastType('error')
       } else {
         router.push('/home')
       }
     } catch (err) {
       console.error('Cascade delete course error:', err)
-      setToastMessage('Errore durante l’eliminazione.')
+      setToastMessage(t('course.toast.deleteError'))
       setToastType('error')
     } finally {
       setLoading(false)
@@ -178,14 +180,14 @@ export default function CourseDetailPage() {
 
   const handleSoftDeleteLecture = async (lectureId: string, lectureTitle: string) => {
     const confirmDelete = confirm(
-      `Sei sicuro di voler eliminare la lezione "${lectureTitle}"? Questa azione può essere annullata entro 30 giorni.`
+      t('course.confirm.deleteLecture', { title: lectureTitle })
     )
     if (!confirmDelete) return
 
     try {
       // Optimistic UI update
       setLectures((prev) => prev.filter((l) => l.id !== lectureId))
-      setToastMessage('Lezione eliminata con successo.')
+      setToastMessage(t('course.toast.deleteLectureSuccess'))
       setToastType('success')
 
       const supabase = createClient()
@@ -197,27 +199,27 @@ export default function CourseDetailPage() {
       if (deleteError) {
         // Rollback on failure
         fetchCourseAndLectures()
-        setToastMessage('Impossibile eliminare la lezione. Riprova.')
+        setToastMessage(t('course.toast.deleteLectureError'))
         setToastType('error')
       }
     } catch (err) {
       console.error('Delete lecture error:', err)
       fetchCourseAndLectures()
-      setToastMessage('Errore durante l’eliminazione.')
+      setToastMessage(t('course.toast.deleteError'))
       setToastType('error')
     }
   }
 
   const handleCancelAndSoftDeleteLecture = async (lectureId: string, lectureTitle: string) => {
     const confirmCancel = confirm(
-      `Sei sicuro di voler annullare e eliminare la lezione "${lectureTitle}"? Questa azione interromperà l'analisi AI in corso e sposterà la lezione nel cestino.`
+      t('course.confirm.cancelLecture', { title: lectureTitle })
     )
     if (!confirmCancel) return
 
     try {
       // Optimistic UI update
       setLectures((prev) => prev.filter((l) => l.id !== lectureId))
-      setToastMessage('Analisi annullata e lezione eliminata.')
+      setToastMessage(t('course.toast.cancelLectureSuccess'))
       setToastType('success')
 
       const supabase = createClient()
@@ -243,13 +245,13 @@ export default function CourseDetailPage() {
       if (jobsError || deleteError) {
         console.error('Cancel and delete error:', jobsError, deleteError)
         fetchCourseAndLectures()
-        setToastMessage('Impossibile annullare la lezione. Riprova.')
+        setToastMessage(t('course.toast.cancelLectureError'))
         setToastType('error')
       }
     } catch (err) {
       console.error('Cancel and delete catch error:', err)
       fetchCourseAndLectures()
-      setToastMessage('Errore durante l’operazione.')
+      setToastMessage(t('course.toast.genericError'))
       setToastType('error')
     }
   }
@@ -265,7 +267,7 @@ export default function CourseDetailPage() {
 
   const formatRecordedDate = (recordedAt: string, createdAt: string) => {
     const targetDate = new Date(recordedAt || createdAt)
-    return targetDate.toLocaleDateString('it-IT', {
+    return targetDate.toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -275,17 +277,17 @@ export default function CourseDetailPage() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'uploaded':
-        return 'In attesa di analisi AI'
+        return t('course.lecture.status.waitingAI')
       case 'queued':
-        return 'In coda'
+        return t('course.lecture.status.queued')
       case 'processing':
-        return 'Analisi AI...'
+        return t('course.lecture.status.processingAI')
       case 'completed':
-        return 'Pronto'
+        return t('course.lecture.status.ready')
       case 'failed':
-        return 'Errore pipeline'
+        return t('course.lecture.status.errorPipeline')
       default:
-        return 'Caricato'
+        return t('course.lecture.status.uploaded')
     }
   }
 
@@ -308,7 +310,7 @@ export default function CourseDetailPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-        <p className="text-slate-500 text-sm mt-2 font-semibold">Caricamento corso...</p>
+        <p className="text-slate-500 text-sm mt-2 font-semibold">{t('course.loading')}</p>
       </div>
     )
   }
@@ -316,18 +318,18 @@ export default function CourseDetailPage() {
   if (error || !course) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 bg-rose-50 text-rose-650 border border-rose-100 rounded-3xl flex items-center justify-center mb-4">
+        <div className="w-16 h-16 bg-rose-50 text-rose-655 border border-rose-100 rounded-3xl flex items-center justify-center mb-4">
           <AlertCircle className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-black text-slate-800 mb-2">Qualcosa è andato storto</h2>
+        <h2 className="text-xl font-black text-slate-800 mb-2">{t('course.error.somethingWentWrong')}</h2>
         <p className="text-slate-500 text-sm max-w-xs mb-6 font-medium">
-          {error || 'Impossibile caricare le informazioni di questo corso.'}
+          {error || t('course.error.notFound')}
         </p>
         <Link
           href="/home"
           className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-6 py-3 rounded-xl text-sm transition-all"
         >
-          Torna alla Home
+          {t('course.error.backToHome')}
         </Link>
       </div>
     )
@@ -370,7 +372,7 @@ export default function CourseDetailPage() {
                 className="w-full text-left px-4 py-2.5 text-sm text-slate-750 hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer font-bold"
               >
                 <Edit3 className="w-4 h-4 text-indigo-500" />
-                <span>Modifica Corso</span>
+                <span>{t('course.dropdown.edit')}</span>
               </button>
               <button
                 onClick={() => {
@@ -380,7 +382,7 @@ export default function CourseDetailPage() {
                 className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-100 font-bold"
               >
                 <Trash2 className="w-4 h-4 text-rose-500" />
-                <span>Elimina Corso</span>
+                <span>{t('course.dropdown.delete')}</span>
               </button>
             </div>
           )}
@@ -396,7 +398,7 @@ export default function CourseDetailPage() {
           {/* Main Column (2 cols on lg): Lectures List */}
           <div className="lg:col-span-2 flex flex-col gap-4">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">
-              Lezioni
+              {t('course.lectures.title')}
             </h2>
 
             {lectures.length === 0 ? (
@@ -407,10 +409,10 @@ export default function CourseDetailPage() {
                 </div>
                 <div className="flex flex-col gap-1.5 max-w-sm mx-auto">
                   <h3 className="font-bold text-slate-800 text-base">
-                    Nessuna lezione registrata
+                    {t('course.lectures.empty.title')}
                   </h3>
                   <p className="text-xs text-slate-500 leading-normal font-medium">
-                    Premi il pulsante 'Nuova Lezione' a destra per registrare una lezione o caricare un file audio originale.
+                    {t('course.lectures.empty.description')}
                   </p>
                 </div>
               </div>
@@ -433,7 +435,7 @@ export default function CourseDetailPage() {
 
                       <div className="flex flex-col gap-0.5 grow overflow-hidden">
                         <h4 className="font-extrabold text-slate-800 group-hover:text-indigo-650 text-sm truncate leading-snug transition-colors">
-                          {lecture.title || `Lezione del ${formatRecordedDate(lecture.recorded_at, lecture.created_at)}`}
+                          {lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })}
                         </h4>
                         <div className="flex items-center gap-2.5 text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-0.5">
                           <span className="flex items-center gap-1">
@@ -464,11 +466,11 @@ export default function CourseDetailPage() {
                             e.stopPropagation()
                             handleCancelAndSoftDeleteLecture(
                               lecture.id,
-                              lecture.title || `Lezione del ${formatRecordedDate(lecture.recorded_at, lecture.created_at)}`
+                              lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })
                             )
                           }}
                           className="p-2 bg-rose-50 hover:bg-rose-100/80 text-rose-650 hover:text-rose-700 border border-rose-150/40 rounded-xl transition-all cursor-pointer flex items-center justify-center hover:scale-[1.03]"
-                          title="Annulla ed elimina"
+                          title={t('course.tooltip.cancelAndEliminate')}
                         >
                           <X className="w-3.5 h-3.5 stroke-[3]" />
                         </button>
@@ -479,11 +481,11 @@ export default function CourseDetailPage() {
                             e.stopPropagation()
                             handleSoftDeleteLecture(
                               lecture.id,
-                              lecture.title || `Lezione del ${formatRecordedDate(lecture.recorded_at, lecture.created_at)}`
+                              lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })
                             )
                           }}
                           className="p-2 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-150/40 hover:border-rose-150/50 rounded-xl transition-all cursor-pointer flex items-center justify-center hover:scale-[1.03]"
-                          title="Elimina lezione"
+                          title={t('course.tooltip.deleteLecture')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -513,19 +515,19 @@ export default function CourseDetailPage() {
                     {course.name}
                   </h2>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5 pl-0.5">
-                    {course.professor || 'Nessun professore specificato'}
+                    {course.professor || t('course.professor.none')}
                   </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-50 text-xs text-slate-500 font-semibold pl-0.5">
                 <span className="bg-slate-100/60 text-slate-655 border border-slate-150/40 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide">
-                  {lectures.length === 1 ? '1 lezione' : `${lectures.length} lezioni totali`}
+                  {lectures.length === 1 ? t('course.lectureCount.one') : t('course.lectureCount.other', { count: lectures.length })}
                 </span>
                 {totalDuration > 0 && (
                   <span className="flex items-center gap-1.5 bg-indigo-50/50 text-indigo-650 border border-indigo-100/30 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide">
                     <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>{formatDuration(totalDuration)} di studio</span>
+                    <span>{t('course.studyDuration', { duration: formatDuration(totalDuration) })}</span>
                   </span>
                 )}
               </div>
@@ -537,17 +539,17 @@ export default function CourseDetailPage() {
                 <AlertCircle className="w-8 h-8 text-amber-500 animate-pulse" />
                 <div className="flex flex-col gap-1">
                   <h3 className="font-extrabold text-sm text-slate-800">
-                    Limite mensile raggiunto ({usage.used}/{usage.limit} lezioni)
+                    {t('course.usageLimit.title', { used: usage.used, limit: usage.limit })}
                   </h3>
                   <p className="text-xs text-slate-500 max-w-xs font-medium leading-normal">
-                    Hai raggiunto il limite di elaborazione per questo mese del piano Free. Fai l'upgrade a Pro per registrare e analizzare lezioni illimitate.
+                    {t('course.usageLimit.description')}
                   </p>
                 </div>
                 <Link
                   href="/profile"
                   className="bg-brand-gradient hover:opacity-95 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md shadow-indigo-100 transition-all cursor-pointer hover:scale-[1.01]"
                 >
-                  Passa a Pro
+                  {t('profile.plan.upgrade')}
                 </Link>
               </div>
             ) : (
@@ -556,7 +558,7 @@ export default function CourseDetailPage() {
                 className="w-full py-5 bg-brand-gradient hover:opacity-95 text-white font-extrabold rounded-3xl shadow-md shadow-indigo-150 hover:shadow-lg transition-all duration-250 flex flex-col items-center justify-center gap-1.5 group text-center cursor-pointer hover:scale-[1.01]"
               >
                 <Mic className="w-6 h-6 animate-pulse group-hover:scale-110 transition-transform duration-200" />
-                <span className="text-base uppercase tracking-wider">Nuova Lezione</span>
+                <span className="text-base uppercase tracking-wider">{t('course.recordButton')}</span>
               </Link>
             )}
 

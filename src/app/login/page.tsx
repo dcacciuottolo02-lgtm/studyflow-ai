@@ -7,33 +7,35 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { Lock, Mail, Loader2, AlertCircle } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { t } = useLanguage()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Map raw Supabase errors to user-friendly Italian messages
+  // Map raw Supabase errors to user-friendly messages
   const mapError = (message: string) => {
     const msg = message.toLowerCase()
     if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
-      return 'Email o password non corretti. Riprova.'
+      return t('auth.login.error.credentials')
     }
     if (msg.includes('email not confirmed')) {
-      return 'Il tuo account non è ancora stato confermato. Controlla la tua e-mail.'
+      return t('auth.login.error.unconfirmed')
     }
     if (msg.includes('too many requests') || msg.includes('rate limit')) {
-      return 'Troppi tentativi. Riprova tra qualche minuto.'
+      return t('auth.login.error.rateLimit')
     }
-    return 'Si è verificato un errore durante l’accesso. Riprova più tardi.'
+    return t('auth.login.error.generic')
   }
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !password) {
-      setError('Inserisci tutti i campi richiesti.')
+      setError(t('auth.login.error.missingFields'))
       return
     }
 
@@ -55,7 +57,7 @@ export default function LoginPage() {
         router.push('/home')
       }
     } catch {
-      setError('Errore di connessione. Controlla la tua rete.')
+      setError(t('auth.login.error.connection'))
       setLoading(false)
     }
   }
@@ -78,7 +80,7 @@ export default function LoginPage() {
         setLoading(false)
       }
     } catch {
-      setError('Impossibile avviare il login con Google.')
+      setError(t('auth.login.error.google'))
       setLoading(false)
     }
   }
@@ -93,7 +95,7 @@ export default function LoginPage() {
             StudyFlow AI
           </h1>
           <p className="text-slate-500 text-sm font-semibold">
-            Trasforma le tue lezioni in materiale di studio in un tocco
+            {t('auth.login.subtitle')}
           </p>
         </div>
 
@@ -109,7 +111,7 @@ export default function LoginPage() {
         <form onSubmit={handleEmailLogin} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-              Indirizzo E-mail
+              {t('auth.login.email')}
             </label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
@@ -130,13 +132,13 @@ export default function LoginPage() {
           <div className="flex flex-col gap-1.5">
             <div className="flex justify-between items-center">
               <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                Password
+                {t('auth.login.password')}
               </label>
               <Link
                 href="/forgot-password"
                 className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 hover:underline"
               >
-                Password dimenticata?
+                {t('auth.login.forgotPassword')}
               </Link>
             </div>
             <div className="relative">
@@ -149,7 +151,7 @@ export default function LoginPage() {
                 disabled={loading}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Inserisci la password"
+                placeholder="••••••••"
                 className="w-full bg-slate-50/80 border border-slate-200/80 pl-10 pr-4 py-3 rounded-xl text-slate-800 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 font-medium"
               />
             </div>
@@ -163,7 +165,7 @@ export default function LoginPage() {
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              'Accedi con E-mail'
+              t('auth.login.submit')
             )}
           </button>
         </form>
@@ -171,7 +173,7 @@ export default function LoginPage() {
         <div className="flex items-center justify-between gap-4">
           <div className="h-px bg-slate-100 grow"></div>
           <span className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">
-            Oppure
+            {t('auth.login.or')}
           </span>
           <div className="h-px bg-slate-100 grow"></div>
         </div>
@@ -189,17 +191,17 @@ export default function LoginPage() {
               d="M12.24 10.285V14.4h6.887c-.275 1.565-1.88 4.604-6.887 4.604-4.33 0-7.866-3.577-7.866-8s3.536-8 7.866-8c2.46 0 4.105 1.025 5.047 1.926l3.247-3.125C18.428 1.421 15.62 0 12.24 0 5.58 0 0 5.37 0 12s5.58 12 12.24 12c6.96 0 11.57-4.89 11.57-11.79 0-.795-.085-1.4-.195-1.925H12.24z"
             />
           </svg>
-          <span>Accedi con Google</span>
+          <span>{t('auth.login.google')}</span>
         </button>
 
         {/* Footer Link */}
         <p className="text-center text-xs text-slate-500 mt-2 font-medium">
-          Non hai un account?{' '}
+          {t('auth.login.noAccount')}{' '}
           <Link
             href="/register"
             className="text-indigo-600 font-bold hover:underline"
           >
-            Registrati gratis
+            {t('auth.login.registerLink')}
           </Link>
         </p>
 

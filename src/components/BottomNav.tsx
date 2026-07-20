@@ -3,18 +3,20 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Home, User } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function BottomNav() {
   const pathname = usePathname()
+  const { t } = useLanguage()
 
   const navItems = [
     {
-      name: 'Home',
+      name: t('nav.home'),
       href: '/home',
       icon: <Home className="w-5 h-5" />,
     },
     {
-      name: 'Profile',
+      name: t('nav.profile'),
       href: '/profile',
       icon: <User className="w-5 h-5" />,
     },
@@ -31,7 +33,7 @@ export default function BottomNav() {
             
         return (
           <Link
-            key={item.name}
+            key={item.href}
             href={item.href}
             className={`flex flex-col items-center gap-1.5 px-6 py-2 transition-all duration-200 ${
               isActive

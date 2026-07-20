@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
+import { useLanguage } from '@/contexts/LanguageContext'
 import LogoutButton from '@/app/home/logout-button'
 import BottomNav from '@/components/BottomNav'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
@@ -33,6 +34,7 @@ interface UserProfile {
 }
 
 export default function ProfilePage() {
+  const { t, language, setLanguage } = useLanguage()
   const router = useRouter()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [usage, setUsage] = useState<UsageStatus | null>(null)
@@ -92,10 +94,12 @@ export default function ProfilePage() {
           const hrs = Math.floor(totalSecs / 3600)
           const mins = Math.round((totalSecs % 3600) / 60)
           if (hrs > 0) {
+            const hrUnit = language === 'it' ? (hrs === 1 ? 'ora' : 'ore') : (hrs === 1 ? 'hour' : 'hours')
+            const connector = language === 'it' ? 'e' : 'and'
             if (mins > 0) {
-              timeStr = `${hrs} ${hrs === 1 ? 'ora' : 'ore'} e ${mins} min`
+              timeStr = `${hrs} ${hrUnit} ${connector} ${mins} min`
             } else {
-              timeStr = `${hrs} ${hrs === 1 ? 'ora' : 'ore'}`
+              timeStr = `${hrs} ${hrUnit}`
             }
           } else {
             timeStr = `${mins} min`
@@ -237,7 +241,7 @@ export default function ProfilePage() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
-        <p className="text-slate-550 text-sm mt-2 font-semibold">Caricamento profilo...</p>
+        <p className="text-slate-550 text-sm mt-2 font-semibold">{t('profile.loading')}</p>
       </div>
     )
   }
@@ -255,7 +259,7 @@ export default function ProfilePage() {
     const nextMonth = new Date()
     nextMonth.setMonth(nextMonth.getMonth() + 1)
     nextMonth.setDate(1)
-    return nextMonth.toLocaleDateString('it-IT', {
+    return nextMonth.toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
@@ -332,13 +336,13 @@ export default function ProfilePage() {
                       <span className="font-extrabold text-slate-800 text-sm">
                         {profile?.plan === 'pro' ? 'PRO ✨' : 'FREE'}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Piano</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('profile.plan')}</span>
                     </div>
                     <div className="flex flex-col border-l border-slate-100 pl-4 text-left">
                       <span className="font-extrabold text-slate-800 text-sm">
                         {usage?.used || 0}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Lezioni</span>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{t('course.lectures.title')}</span>
                     </div>
                   </div>
                 </div>
@@ -346,11 +350,11 @@ export default function ProfilePage() {
 
               {/* Biography details block */}
               <div className="flex flex-col gap-1.5 pl-1.5 text-left text-xs font-semibold text-slate-655">
-                <p className="font-extrabold text-slate-850">🎓 Università: {profile?.university || 'Non specificata'}</p>
-                <p className="text-slate-500">✉️ E-mail: {profile?.email}</p>
+                <p className="font-extrabold text-slate-850">🎓 {t('profile.university')}: {profile?.university || t('profile.universityNotSpecified')}</p>
+                <p className="text-slate-500">✉️ {t('profile.email')}: {profile?.email}</p>
                 <p className="text-emerald-600 font-bold flex items-center gap-1.5 mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span>Account attivo e autenticato</span>
+                  <span>{t('profile.status.active')}</span>
                 </p>
               </div>
             </div>
@@ -360,10 +364,10 @@ export default function ProfilePage() {
               <div className="flex items-center justify-between border-b border-slate-50 pb-4">
                 <div className="flex items-center gap-2 pl-0.5">
                   <Sparkles className="w-5 h-5 text-indigo-500" />
-                  <h3 className="font-extrabold text-sm text-slate-850">Statistiche Studio</h3>
+                  <h3 className="font-extrabold text-sm text-slate-850">{t('profile.stats')}</h3>
                 </div>
                 <span className="text-[9px] font-extrabold text-indigo-650 bg-indigo-50/50 border border-indigo-100/30 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                  Questa Settimana
+                  {t('profile.stats.thisWeek')}
                 </span>
               </div>
 
@@ -371,13 +375,13 @@ export default function ProfilePage() {
               <div className="flex flex-col gap-4">
                 <div className="flex items-end justify-between h-36 px-2 pt-2 border-b border-slate-100 pb-2">
                   {[
-                    { day: 'Lun', count: weeklyActivity[0], height: getBarHeight(weeklyActivity[0]) },
-                    { day: 'Mar', count: weeklyActivity[1], height: getBarHeight(weeklyActivity[1]) },
-                    { day: 'Mer', count: weeklyActivity[2], height: getBarHeight(weeklyActivity[2]) },
-                    { day: 'Gio', count: weeklyActivity[3], height: getBarHeight(weeklyActivity[3]) },
-                    { day: 'Ven', count: weeklyActivity[4], height: getBarHeight(weeklyActivity[4]) },
-                    { day: 'Sab', count: weeklyActivity[5], height: getBarHeight(weeklyActivity[5]) },
-                    { day: 'Dom', count: weeklyActivity[6], height: getBarHeight(weeklyActivity[6]) }
+                    { day: t('profile.stats.monday'), count: weeklyActivity[0], height: getBarHeight(weeklyActivity[0]) },
+                    { day: t('profile.stats.tuesday'), count: weeklyActivity[1], height: getBarHeight(weeklyActivity[1]) },
+                    { day: t('profile.stats.wednesday'), count: weeklyActivity[2], height: getBarHeight(weeklyActivity[2]) },
+                    { day: t('profile.stats.thursday'), count: weeklyActivity[3], height: getBarHeight(weeklyActivity[3]) },
+                    { day: t('profile.stats.friday'), count: weeklyActivity[4], height: getBarHeight(weeklyActivity[4]) },
+                    { day: t('profile.stats.saturday'), count: weeklyActivity[5], height: getBarHeight(weeklyActivity[5]) },
+                    { day: t('profile.stats.sunday'), count: weeklyActivity[6], height: getBarHeight(weeklyActivity[6]) }
                   ].map((item, idx) => (
                     <div key={idx} className="flex flex-col items-center gap-2 w-8 group cursor-pointer">
                       <div className="relative w-2.5 h-24 bg-slate-100 rounded-full flex items-end">
@@ -387,7 +391,7 @@ export default function ProfilePage() {
                         />
                         {/* Tooltip on hover */}
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-slate-900 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
-                          {item.count} lez.
+                          {t('profile.stats.lecturesCount', { count: item.count })}
                         </div>
                       </div>
                       <span className="text-[10px] font-extrabold text-slate-400 group-hover:text-slate-700 transition-colors">
@@ -404,7 +408,7 @@ export default function ProfilePage() {
                       {totalStudyTime}
                     </span>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                      Tempo di Studio Totale
+                      {t('profile.stats.totalStudyTime')}
                     </span>
                   </div>
                   <div className="flex flex-col gap-0.5">
@@ -412,18 +416,37 @@ export default function ProfilePage() {
                       {flashcardCompletion}%
                     </span>
                     <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                      Flashcard Studiate
+                      {t('profile.stats.flashcardProgress')}
                     </span>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* Settings / Logout */}
+                     {/* Settings / Logout */}
             <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4">
               <div className="flex items-center gap-2 pl-0.5">
                 <User className="w-5 h-5 text-indigo-500" />
-                <h3 className="font-extrabold text-sm text-slate-850">Impostazioni</h3>
+                <h3 className="font-extrabold text-sm text-slate-850">{t('profile.settings')}</h3>
+              </div>
+              <div className="flex flex-col gap-4 border-t border-slate-100 pt-4 w-full">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-600">{t('profile.language')}</span>
+                  <select
+                    value={language}
+                    onChange={async (e) => {
+                      const newLang = e.target.value as 'it' | 'en'
+                      await setLanguage(newLang)
+                      setToast({
+                        type: 'success',
+                        message: t('profile.toast.languageSuccess'),
+                      })
+                    }}
+                    className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-extrabold text-slate-850 outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 cursor-pointer transition-all"
+                  >
+                    <option value="it">🇮🇹 Italiano</option>
+                    <option value="en">🇬🇧 English</option>
+                  </select>
+                </div>
               </div>
               <div className="w-full flex justify-center border-t border-slate-100 pt-4">
                 <LogoutButton />
@@ -439,7 +462,7 @@ export default function ProfilePage() {
             <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
               <div className="flex items-center gap-2 pl-0.5">
                 <CreditCard className="w-5 h-5 text-indigo-500" />
-                <h3 className="font-extrabold text-sm text-slate-850">Abbonamento & Utilizzo</h3>
+                <h3 className="font-extrabold text-sm text-slate-850">{t('profile.subscriptionAndUsage')}</h3>
               </div>
 
               {profile?.plan === 'pro' ? (
@@ -448,9 +471,9 @@ export default function ProfilePage() {
                   <div className="bg-gradient-to-br from-amber-50/50 to-orange-50/20 border border-amber-100 p-4 rounded-2xl flex items-start gap-3">
                     <Zap className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                     <div className="flex flex-col gap-0.5 text-left">
-                      <h4 className="font-extrabold text-xs text-amber-800">Piano PRO Attivo</h4>
+                      <h4 className="font-extrabold text-xs text-amber-800">{t('profile.plan.proActive')}</h4>
                       <p className="text-[11px] text-slate-500 font-semibold leading-relaxed">
-                        Hai accesso a lezioni e registrazioni illimitate, flashcard e quiz generati con AI.
+                        {t('profile.plan.proDesc')}
                       </p>
                     </div>
                   </div>
@@ -459,7 +482,7 @@ export default function ProfilePage() {
                     disabled
                     className="w-full py-3.5 bg-slate-50 border border-slate-200 text-slate-400 font-extrabold rounded-xl text-xs text-center cursor-not-allowed"
                   >
-                    Gestisci abbonamento (Stripe Coming Soon)
+                    {t('profile.plan.manageComingSoon')}
                   </button>
 
                   {/* Dev Only downgrade option */}
@@ -468,7 +491,7 @@ export default function ProfilePage() {
                     disabled={actionLoading}
                     className="text-[10px] text-slate-450 hover:text-rose-550 hover:underline text-center mt-1 transition-all cursor-pointer font-semibold"
                   >
-                    {actionLoading ? 'Downgrade in corso...' : '[Dev Only] Ritorna al piano Free per test'}
+                    {actionLoading ? t('profile.dev.downgrading') : t('profile.dev.downgrade')}
                   </button>
                 </div>
               ) : (
@@ -476,8 +499,8 @@ export default function ProfilePage() {
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-1.5">
                     <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5">
-                      <span>Limite lezioni questo mese</span>
-                      <span>{usage?.used || 0} di {usage?.limit || 3}</span>
+                      <span>{t('profile.usage.monthlyLimit')}</span>
+                      <span>{t('profile.usage.counter', { used: usage?.used || 0, limit: usage?.limit || 3 })}</span>
                     </div>
                     
                     {/* Progress bar */}
@@ -492,7 +515,7 @@ export default function ProfilePage() {
 
                     <p className="text-[10px] text-slate-450 mt-1.5 flex items-center gap-1 pl-0.5 font-semibold">
                       <Info className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                      <span>Il limite si azzera il 1° del mese ({getNextMonthResetDate()})</span>
+                      <span>{t('profile.usage.resetDate', { date: getNextMonthResetDate() })}</span>
                     </p>
                   </div>
 
@@ -501,7 +524,7 @@ export default function ProfilePage() {
                     className="w-full py-3.5 bg-brand-gradient hover-bg-brand-gradient text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-indigo-100 transition-all cursor-pointer hover:scale-[1.01]"
                   >
                     <Zap className="w-4 h-4 fill-white" />
-                    <span>Passa a Pro</span>
+                    <span>{t('profile.plan.upgrade')}</span>
                   </button>
                 </div>
               )}
@@ -530,9 +553,9 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <h3 className="font-black text-xl text-slate-900">Passa a StudyFlow PRO</h3>
+              <h3 className="font-black text-xl text-slate-900">{t('profile.upgradeModal.title')}</h3>
               <p className="text-xs text-slate-500 px-4 font-semibold">
-                Sblocca tutto il potenziale dello studio intelligente con l'AI.
+                {t('profile.upgradeModal.subtitle')}
               </p>
             </div>
 
@@ -540,19 +563,19 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-2.5 text-left border-t border-b border-slate-100 py-4 text-xs text-slate-600 font-semibold">
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-indigo-500 shrink-0" />
-                <span>Lezioni e Registrazioni <strong>illimitate</strong></span>
+                <span>{t('profile.upgradeModal.feature1')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-indigo-500 shrink-0" />
-                <span>Nessun limite di caricamento file audio</span>
+                <span>{t('profile.upgradeModal.feature2')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-indigo-500 shrink-0" />
-                <span>Flashcard e quiz illimitati</span>
+                <span>{t('profile.upgradeModal.feature3')}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Check className="w-4 h-4 text-indigo-500 shrink-0" />
-                <span>Trascrizioni ad altissima fedeltà</span>
+                <span>{t('profile.upgradeModal.feature4')}</span>
               </div>
             </div>
 
@@ -566,18 +589,18 @@ export default function ProfilePage() {
                 {actionLoading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Elaborazione...</span>
+                    <span>{t('profile.upgradeModal.processing')}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4 fill-white" />
-                    <span>Attiva Upgrade (MOCK DEV)</span>
+                    <span>{t('profile.upgradeModal.activateMock')}</span>
                   </>
                 )}
               </button>
               
               <p className="text-[10px] text-slate-400 px-4 leading-normal italic font-semibold">
-                * Nota: Questa è una simulazione per MVP. In produzione questo pulsante attiverà Stripe Checkout.
+                {t('profile.upgradeModal.note')}
               </p>
             </div>
 

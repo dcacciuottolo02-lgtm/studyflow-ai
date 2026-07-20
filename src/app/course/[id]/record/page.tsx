@@ -9,6 +9,7 @@ import { createClient } from '@/utils/supabase/client'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
 import Toast from '@/components/Toast'
 import BottomNav from '@/components/BottomNav'
+import { useLanguage } from '@/contexts/LanguageContext'
 import {
   ArrowLeft,
   Mic,
@@ -32,6 +33,7 @@ function RecordLectureContent() {
   const params = useParams()
   const router = useRouter()
   const courseId = params.id as string
+  const { t, language } = useLanguage()
 
   // Global UI states
   const [mode, setMode] = useState<'choose' | 'record' | 'upload'>('choose')
@@ -135,7 +137,7 @@ function RecordLectureContent() {
       setRecordingState('idle')
     } catch {
       setMicPermission(false)
-      setError('Consenti l’accesso al microfono nel browser per registrare la lezione.')
+      setError(t('record.error.micPermission'))
     }
   }
 
@@ -179,7 +181,7 @@ function RecordLectureContent() {
       setSeconds(0)
     } catch (err: any) {
       console.error('Failed to start MediaRecorder:', err)
-      setError('Impossibile avviare il registratore audio: ' + err.message)
+      setError(t('record.error.micStart', { message: err.message }))
     }
   }
 
@@ -249,7 +251,7 @@ function RecordLectureContent() {
   const processSelectedFile = async (file: File) => {
     setError(null)
     if (!file.type.startsWith('audio/')) {
-      setError('Formato non supportato. Trascina o seleziona un file audio valido (es. MP3, WAV, M4A, WEBM).')
+      setError(t('record.error.unsupportedFormat'))
       return
     }
 
@@ -288,7 +290,7 @@ function RecordLectureContent() {
   const proceedWithUploadAndPipeline = async (file: File, durationSecs: number) => {
     setUploading(true)
     setError(null)
-    setUploadStatusText('Inizializzazione caricamento...')
+    setUploadStatusText(t('record.status.init'))
 
     try {
       const supabase = createClient()
@@ -298,14 +300,14 @@ function RecordLectureContent() {
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        setError('Utente scollegato. Effettua nuovamente l’accesso.')
+        setError(t('record.error.unauthenticated'))
         setUploading(false)
         return
       }
 
       // 1. Insert Lecture record in database with status 'uploading'
-      setUploadStatusText('Creazione record lezione...')
-      const rawTitle = topic.trim() || `Lezione del ${new Date().toLocaleDateString('it-IT')}`
+      setUploadStatusText(t('record.status.creating'))
+      const rawTitle = topic.trim() || t('course.lecture.defaultTitle', { date: new Date().toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US') })
       const { data: lectureData, error: insertError } = await supabase
         .from('lectures')
         .insert({
@@ -319,7 +321,7 @@ function RecordLectureContent() {
         .single()
 
       if (insertError || !lectureData) {
-        throw new Error('Impossibile salvare il record della lezione nel database.')
+        throw new Error(t('record.error.dbSaveLecture'))
       }
 
       const lectureId = lectureData.id
@@ -340,7 +342,7 @@ function RecordLectureContent() {
       if (resErr || !resource) {
         // Cleanup created lecture record on resource fail
         await supabase.from('lectures').delete().eq('id', lectureId)
-        throw new Error('Impossibile creare il record della risorsa nel database.')
+        throw new Error(t('record.error.dbSaveResource'))
       }
 
       const resourceId = resource.id
@@ -350,7 +352,7 @@ function RecordLectureContent() {
       const storagePath = `${user.id}/${lectureId}/${resourceId}_audio.${fileExt}`
 
       // 3. Upload file to private Supabase Storage bucket
-      setUploadStatusText('Caricamento file audio su server (storage)...')
+      setUploadStatusText(t('record.status.uploadingStorage'))
       const { error: storageError } = await supabase.storage
         .from('lecture-resources')
         .upload(storagePath, file, {
@@ -368,7 +370,7 @@ function RecordLectureContent() {
       const finalFileUrl = `lecture-resources/${storagePath}`
 
       // 4. Update resource status to ready and set final file_url
-      setUploadStatusText('Finalizzazione record risorsa...')
+      setUploadStatusText(t('record.status.finalizing'))
       const { error: updResErr } = await supabase
         .from('resources')
         .update({
@@ -377,7 +379,7 @@ function RecordLectureContent() {
         })
         .eq('id', resourceId)
 
-      if (updResErr) throw new Error('Errore durante l’aggiornamento della risorsa nel database.')
+      if (updResErr) throw new Error(t('record.error.dbUpdateResource'))
 
       // 5. Update lecture status to uploaded
       const { error: updLecErr } = await supabase
@@ -387,10 +389,10 @@ function RecordLectureContent() {
         })
         .eq('id', lectureId)
 
-      if (updLecErr) throw new Error('Errore durante l’aggiornamento dello stato della lezione.')
+      if (updLecErr) throw new Error(t('record.error.dbUpdateLecture'))
 
       // 6. Trigger AI Processing background pipeline
-      setUploadStatusText('Inizializzazione pipeline AI in background...')
+      setUploadStatusText(t('record.status.triggeringAI'))
       const response = await fetch(`/api/lectures/${lectureId}/process`, {
         method: 'POST',
         headers: {
@@ -411,7 +413,7 @@ function RecordLectureContent() {
       router.push(`/lecture/${lectureId}`)
     } catch (err: any) {
       console.error('[Upload Pipeline] Error:', err)
-      setError(err.message || 'Si è verificato un errore durante il caricamento o l’avvio della pipeline AI.')
+      setError(err.message || t('record.error.pipeline'))
       setUploading(false)
     }
   }
@@ -431,8 +433,8 @@ function RecordLectureContent() {
   if (checkingUsage) {
     return (
       <div className="w-full max-w-xl bg-white border border-slate-100 p-8 rounded-3xl shadow-soft-lg flex flex-col gap-6 text-center items-center justify-center py-16">
-        <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-        <p className="text-slate-500 text-sm mt-2 font-semibold">Verifica limiti in corso...</p>
+        <Loader2 className="w-8 h-8 text-indigo-655 animate-spin" />
+        <p className="text-slate-500 text-sm mt-2 font-semibold">{t('record.status.checkingLimits')}</p>
       </div>
     )
   }
@@ -445,13 +447,13 @@ function RecordLectureContent() {
         </div>
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-black text-slate-900 leading-tight">
-            Limite lezioni raggiunto
+            {t('record.usageLimitReached.title')}
           </h1>
           <p className="text-sm font-bold text-slate-700">
-            Hai già elaborato {usage.used} di {usage.limit} lezioni questo mese col piano Free.
+            {t('record.usageLimitReached.subtitle', { used: usage.used, limit: usage.limit })}
           </p>
           <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-relaxed font-semibold">
-            Fai l'upgrade al piano Pro per sbloccare le registrazioni illimitate e tutte le funzionalità avanzate per lo studio.
+            {t('record.usageLimitReached.description')}
           </p>
         </div>
         <div className="flex flex-col gap-3 w-full mt-2">
@@ -459,13 +461,13 @@ function RecordLectureContent() {
             href="/profile"
             className="w-full bg-brand-gradient hover:opacity-95 text-white font-extrabold py-3.5 rounded-2xl text-sm transition-all shadow-md shadow-indigo-100 text-center cursor-pointer hover:scale-[1.01]"
           >
-            Passa a Pro
+            {t('profile.plan.upgrade')}
           </Link>
           <Link
             href={`/course/${courseId}`}
             className="w-full bg-white border border-slate-200 text-slate-600 font-extrabold py-3.5 rounded-2xl text-sm transition-all text-center cursor-pointer hover:bg-slate-50"
           >
-            Torna al Corso
+            {t('record.button.backToCourse')}
           </Link>
         </div>
       </div>
@@ -481,13 +483,13 @@ function RecordLectureContent() {
           <Sparkles className="w-6 h-6 text-indigo-500 absolute inset-0 m-auto animate-pulse" />
         </div>
         <div className="flex flex-col gap-2.5">
-          <h3 className="text-xl font-black text-slate-900">Salvataggio lezione</h3>
+          <h3 className="text-xl font-black text-slate-900">{t('record.loader.title')}</h3>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">
             {uploadStatusText}
           </p>
         </div>
         <div className="bg-indigo-50/50 border border-indigo-100/30 p-4.5 rounded-2xl max-w-xs text-xs text-indigo-700 leading-relaxed font-medium">
-          Non chiudere o ricaricare questa pagina. L'audio originale è in fase di caricamento sicuro e la pipeline AI si attiverà all'istante.
+          {t('record.loader.description')}
         </div>
       </div>
     )
@@ -500,10 +502,10 @@ function RecordLectureContent() {
       <div className="flex flex-col gap-2 pl-0.5">
         <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
           <Mic className="w-6 h-6 text-brand-gradient" />
-          <span>Nuova Lezione</span>
+          <span>{t('record.form.title')}</span>
         </h1>
         <p className="text-slate-500 text-sm font-semibold">
-          Aggiungi una nuova lezione al corso per elaborarla successivamente.
+          {t('record.form.subtitle')}
         </p>
       </div>
 
@@ -518,14 +520,14 @@ function RecordLectureContent() {
       {/* Form Fields: Topic Topic Input */}
       <div className="flex flex-col gap-1.5 pl-0.5">
         <label className="text-[10px] font-extrabold text-slate-455 uppercase tracking-widest">
-          Titolo / Argomento lezione
+          {t('record.form.label.topic')}
         </label>
         <input
           type="text"
           value={topic}
           disabled={recordingState !== 'idle' || uploading}
           onChange={(e) => setTopic(e.target.value)}
-          placeholder="es. Lezione 4 - Elasticità della domanda"
+          placeholder={t('record.form.placeholder.topic')}
           className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-2xl text-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
         />
       </div>
@@ -534,7 +536,7 @@ function RecordLectureContent() {
       <div className="flex flex-col gap-2.5 pl-0.5 border-t border-slate-100 pt-4.5">
         <label className="text-[10px] font-extrabold text-slate-455 uppercase tracking-widest flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-          <span>Moduli AI da generare</span>
+          <span>{t('record.form.label.modules')}</span>
         </label>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -547,8 +549,8 @@ function RecordLectureContent() {
               className="w-4 h-4 rounded text-indigo-650 accent-indigo-650 border-slate-300 cursor-not-allowed"
             />
             <div className="flex flex-col text-left">
-              <span className="text-xs font-bold text-slate-700">Trascrizione</span>
-              <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">Sempre richiesta</span>
+              <span className="text-xs font-bold text-slate-700">{t('hub.tabs.transcript')}</span>
+              <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">{t('record.form.alwaysRequired')}</span>
             </div>
           </div>
 
@@ -566,8 +568,8 @@ function RecordLectureContent() {
               className="w-4 h-4 rounded text-indigo-650 accent-indigo-650 border-slate-300 cursor-pointer focus:ring-indigo-500 disabled:cursor-not-allowed"
             />
             <div className="flex flex-col text-left">
-              <span className="text-xs font-bold text-slate-700">Riassunto</span>
-              <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">Riassunto strutturato</span>
+              <span className="text-xs font-bold text-slate-700">{t('hub.tabs.summary')}</span>
+              <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">{t('record.form.summaryDesc')}</span>
             </div>
           </label>
 
@@ -585,8 +587,8 @@ function RecordLectureContent() {
               className="w-4 h-4 rounded text-indigo-650 accent-indigo-650 border-slate-300 cursor-pointer focus:ring-indigo-500 disabled:cursor-not-allowed"
             />
             <div className="flex flex-col text-left">
-              <span className="text-xs font-bold text-slate-700">Flashcard</span>
-              <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">Domande e risposte</span>
+              <span className="text-xs font-bold text-slate-700">{t('hub.tabs.flashcards')}</span>
+              <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">{t('record.form.flashcardsDesc')}</span>
             </div>
           </label>
 
@@ -604,8 +606,8 @@ function RecordLectureContent() {
               className="w-4 h-4 rounded text-indigo-650 accent-indigo-650 border-slate-300 cursor-pointer focus:ring-indigo-500 disabled:cursor-not-allowed"
             />
             <div className="flex flex-col text-left">
-              <span className="text-xs font-bold text-slate-700">Quiz</span>
-              <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">Test autovalutazione</span>
+              <span className="text-xs font-bold text-slate-700">{t('hub.tabs.quiz')}</span>
+              <span className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">{t('record.form.quizDesc')}</span>
             </div>
           </label>
         </div>
@@ -622,9 +624,9 @@ function RecordLectureContent() {
             <div className="w-12 h-12 bg-rose-50/50 rounded-full flex items-center justify-center text-rose-500 group-hover:scale-105 transition-transform duration-200 mb-3.5 border border-rose-100/30">
               <Mic className="w-5 h-5" />
             </div>
-            <h3 className="font-extrabold text-slate-800 text-sm mb-1">Registra Audio</h3>
-            <p className="text-xs text-slate-450 leading-relaxed font-semibold">
-              Registra direttamente la lezione usando il microfono
+            <h3 className="font-extrabold text-slate-800 text-sm mb-1">{t('record.choose.record.title')}</h3>
+            <p className="text-xs text-slate-455 leading-relaxed font-semibold">
+              {t('record.choose.record.description')}
             </p>
           </button>
 
@@ -633,12 +635,12 @@ function RecordLectureContent() {
             onClick={() => setMode('upload')}
             className="flex flex-col items-center justify-center p-6 bg-white border border-slate-100 rounded-3xl hover:border-slate-350 hover:shadow-soft-md transition-all duration-250 group text-center cursor-pointer"
           >
-            <div className="w-12 h-12 bg-indigo-50/50 rounded-full flex items-center justify-center text-indigo-650 group-hover:scale-105 transition-transform duration-200 mb-3.5 border border-indigo-100/30">
+            <div className="w-12 h-12 bg-indigo-50/50 rounded-full flex items-center justify-center text-indigo-655 group-hover:scale-105 transition-transform duration-200 mb-3.5 border border-indigo-100/30">
               <Upload className="w-5 h-5" />
             </div>
-            <h3 className="font-extrabold text-slate-800 text-sm mb-1">Carica File</h3>
-            <p className="text-xs text-slate-450 leading-relaxed font-semibold">
-              Carica una registrazione salvata sul tuo dispositivo
+            <h3 className="font-extrabold text-slate-800 text-sm mb-1">{t('record.choose.upload.title')}</h3>
+            <p className="text-xs text-slate-455 leading-relaxed font-semibold">
+              {t('record.choose.upload.description')}
             </p>
           </button>
         </div>
@@ -667,7 +669,11 @@ function RecordLectureContent() {
               {new Date(seconds * 1000).toISOString().substr(11, 8)}
             </span>
             <span className="text-[10px] font-extrabold text-slate-450 uppercase tracking-widest">
-              {recordingState === 'recording' ? 'Registrazione attiva' : recordingState === 'paused' ? 'In pausa' : 'Pronto per registrare'}
+              {recordingState === 'recording'
+                ? t('record.status.active')
+                : recordingState === 'paused'
+                ? t('record.status.paused')
+                : t('record.status.ready')}
             </span>
           </div>
 
@@ -679,9 +685,9 @@ function RecordLectureContent() {
                   key={idx}
                   className="w-1 bg-brand-gradient rounded-full animate-wave-bar"
                   style={{
-                    height: '100%',
-                    animationDelay: `${delay}s`,
-                    animationDuration: `${0.8 + delay}s`,
+                     height: '100%',
+                     animationDelay: `${delay}s`,
+                     animationDuration: `${0.8 + delay}s`,
                   }}
                 />
               ))}
@@ -696,7 +702,7 @@ function RecordLectureContent() {
                 className="w-full bg-brand-gradient hover:opacity-95 text-white font-extrabold py-3.5 px-6 rounded-2xl flex items-center justify-center gap-2 text-sm shadow-md shadow-indigo-100 cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-white" />
-                <span>Avvia</span>
+                <span>{t('record.button.start')}</span>
               </button>
             ) : (
               <>
@@ -705,7 +711,7 @@ function RecordLectureContent() {
                   <button
                     onClick={handlePauseRecording}
                     className="p-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl flex items-center justify-center cursor-pointer"
-                    title="Pausa"
+                    title={t('record.tooltip.pause')}
                   >
                     <Pause className="w-5 h-5 fill-slate-700" />
                   </button>
@@ -713,7 +719,7 @@ function RecordLectureContent() {
                   <button
                     onClick={handleResumeRecording}
                     className="p-3 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-2xl flex items-center justify-center cursor-pointer animate-pulse"
-                    title="Riprendi"
+                    title={t('record.tooltip.resume')}
                   >
                     <Play className="w-5 h-5 fill-slate-700" />
                   </button>
@@ -725,7 +731,7 @@ function RecordLectureContent() {
                   className="grow bg-brand-gradient hover:opacity-95 text-white font-extrabold py-3 px-5 rounded-2xl flex items-center justify-center gap-2 text-sm shadow-md shadow-indigo-100 cursor-pointer"
                 >
                   <Square className="w-4 h-4 fill-white" />
-                  <span>Termina e Salva</span>
+                  <span>{t('record.button.stopAndSave')}</span>
                 </button>
               </>
             )}
@@ -734,7 +740,7 @@ function RecordLectureContent() {
             <button
               onClick={handleCancelRecording}
               className="p-3 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-2xl flex items-center justify-center cursor-pointer font-bold text-sm"
-              title="Annulla tutto"
+              title={t('record.tooltip.cancel')}
             >
               <Trash2 className="w-5 h-5" />
             </button>
@@ -763,16 +769,16 @@ function RecordLectureContent() {
               </div>
               <div className="flex flex-col gap-1">
                 <p className="text-sm font-extrabold text-slate-800">
-                  Trascina il file qui oppure sfoglia
+                  {t('record.upload.dragDrop')}
                 </p>
                 <p className="text-xs text-slate-400 font-semibold leading-normal">
-                  Supporta formati MP3, M4A, WAV, WEBM (Max 150MB)
+                  {t('record.upload.formats')}
                 </p>
               </div>
 
               {/* Input trigger */}
               <label className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-xl text-xs font-extrabold shadow-soft-sm cursor-pointer transition-all duration-200 mt-2">
-                <span>Sfoglia file</span>
+                <span>{t('record.upload.browse')}</span>
                 <input
                   type="file"
                   accept="audio/*"
@@ -805,7 +811,7 @@ function RecordLectureContent() {
                 <button
                   onClick={() => setSelectedFile(null)}
                   className="text-slate-400 hover:text-rose-600 p-1.5 rounded-full hover:bg-slate-200 cursor-pointer"
-                  title="Rimuovi file"
+                  title={t('record.tooltip.removeFile')}
                 >
                   <Trash2 className="w-4 h-4 text-rose-500" />
                 </button>
@@ -819,14 +825,14 @@ function RecordLectureContent() {
                   }}
                   className="w-1/2 bg-white border border-slate-200 text-slate-750 font-bold py-3 rounded-2xl text-xs text-center cursor-pointer transition-all duration-200"
                 >
-                  Annulla
+                  {t('courseModal.cancel')}
                 </button>
                 <button
                   onClick={handleConfirmFileUpload}
                   className="w-1/2 bg-brand-gradient hover:opacity-95 text-white font-extrabold py-3 rounded-2xl text-xs flex items-center justify-center gap-1 shadow-md shadow-indigo-100 cursor-pointer transition-all duration-200 hover:scale-[1.01]"
                 >
                   <Sparkles className="w-4 h-4 fill-white" />
-                  <span>Inizia Analisi AI</span>
+                  <span>{t('record.button.startAI')}</span>
                 </button>
               </div>
             </div>
@@ -838,7 +844,7 @@ function RecordLectureContent() {
               onClick={() => setMode('choose')}
               className="text-xs text-indigo-650 hover:underline font-bold text-center mt-2 cursor-pointer"
             >
-              Indietro alle opzioni
+              {t('record.button.backToOptions')}
             </button>
           )}
         </div>

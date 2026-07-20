@@ -7,9 +7,11 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { Mail, ArrowLeft, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 function ConfirmContent() {
   const searchParams = useSearchParams()
+  const { t } = useLanguage()
   const email = searchParams.get('email') || 'tua e-mail'
 
   const [loading, setLoading] = useState(false)
@@ -47,16 +49,16 @@ function ConfirmContent() {
 
       if (resendError) {
         if (resendError.message.toLowerCase().includes('rate limit') || resendError.message.toLowerCase().includes('too many requests')) {
-          setError('Troppe richieste in poco tempo. Attendi prima di riprovare.')
+          setError(t('auth.confirm.error.rateLimit'))
         } else {
-          setError('Impossibile reinviare l’e-mail. Verifica l’indirizzo.')
+          setError(t('auth.confirm.error.invalidEmail'))
         }
       } else {
-        setSuccess('E-mail di conferma reinviata con successo!')
+        setSuccess(t('auth.confirm.success'))
         setCooldown(30) // 30 seconds cooldown
       }
     } catch {
-      setError('Errore di connessione. Controlla la tua rete.')
+      setError(t('auth.confirm.error.connection'))
     } finally {
       setLoading(false)
     }
@@ -73,10 +75,10 @@ function ConfirmContent() {
       {/* Header */}
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-black text-slate-800">
-          Controlla la tua e-mail
+          {t('auth.confirm.heading')}
         </h1>
         <p className="text-slate-500 text-sm px-2 font-medium">
-          Abbiamo inviato un link di attivazione all’indirizzo:
+          {t('auth.confirm.message')}
         </p>
         <p className="text-sm font-bold text-slate-800 break-all select-all">
           {decodeURIComponent(email)}
@@ -109,9 +111,9 @@ function ConfirmContent() {
           {loading ? (
             <RefreshCw className="w-4 h-4 animate-spin" />
           ) : cooldown > 0 ? (
-            `Reinvia e-mail (${cooldown}s)`
+            t('auth.confirm.resendCooldown', { cooldown })
           ) : (
-            'Reinvia e-mail di conferma'
+            t('auth.confirm.resend')
           )}
         </button>
 
@@ -120,12 +122,12 @@ function ConfirmContent() {
           className="w-full bg-slate-50 border border-slate-200/80 text-slate-700 font-extrabold py-3 rounded-xl hover:bg-slate-100 transition-all duration-200 flex items-center justify-center gap-2 text-sm cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Torna al login</span>
+          <span>{t('auth.confirm.back')}</span>
         </Link>
       </div>
 
       <p className="text-xs text-slate-400 font-medium mt-2">
-        Non trovi l’e-mail? Controlla anche nella cartella Spam o Promozioni.
+        {t('auth.confirm.spamHint')}
       </p>
 
     </div>
@@ -136,13 +138,20 @@ export default function ConfirmPage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50 transition-colors duration-300">
       <Suspense fallback={
-        <div className="w-full max-w-md bg-white border border-slate-100 p-8 rounded-3xl shadow-soft-sm flex flex-col gap-6 text-center items-center justify-center py-16">
-          <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
-          <p className="text-slate-500 text-sm mt-2 font-semibold">Caricamento...</p>
-        </div>
+        <ConfirmFallback />
       }>
         <ConfirmContent />
       </Suspense>
     </main>
+  )
+}
+
+function ConfirmFallback() {
+  const { t } = useLanguage()
+  return (
+    <div className="w-full max-w-md bg-white border border-slate-100 p-8 rounded-3xl shadow-soft-sm flex flex-col gap-6 text-center items-center justify-center py-16">
+      <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
+      <p className="text-slate-500 text-sm mt-2 font-semibold">{t('auth.confirm.loading')}</p>
+    </div>
   )
 }

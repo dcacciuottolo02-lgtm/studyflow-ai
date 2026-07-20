@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import { createClient } from '@/utils/supabase/client'
+import { useLanguage } from '@/contexts/LanguageContext'
 import BottomNav from '@/components/BottomNav'
 import {
   ArrowLeft,
@@ -76,6 +77,7 @@ interface NotRequestedPlaceholderProps {
 }
 
 function NotRequestedPlaceholder({ moduleName, onGenerate, generating }: NotRequestedPlaceholderProps) {
+  const { t } = useLanguage()
   return (
     <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md flex flex-col items-center gap-4 w-full">
       <div className="w-12 h-12 bg-slate-50 text-slate-450 border border-slate-100 rounded-full flex items-center justify-center">
@@ -83,10 +85,10 @@ function NotRequestedPlaceholder({ moduleName, onGenerate, generating }: NotRequ
       </div>
       <div className="flex flex-col gap-1.5">
         <p className="text-sm font-extrabold text-slate-800">
-          {moduleName} non richiesto
+          {t('hub.module.notRequested', { name: moduleName })}
         </p>
         <p className="text-xs text-slate-455 font-semibold max-w-xs mx-auto leading-relaxed">
-          Non hai selezionato la generazione di questo modulo all'inizio. Puoi generarlo adesso in pochi istanti.
+          {t('hub.module.notRequested.desc')}
         </p>
       </div>
       <button
@@ -97,12 +99,12 @@ function NotRequestedPlaceholder({ moduleName, onGenerate, generating }: NotRequ
         {generating ? (
           <>
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            <span>Generazione in corso...</span>
+            <span>{t('hub.info.generating')}</span>
           </>
         ) : (
           <>
             <Sparkles className="w-3.5 h-3.5 fill-white" />
-            <span>Genera ora</span>
+            <span>{t('hub.module.generateNow')}</span>
           </>
         )}
       </button>
@@ -111,6 +113,7 @@ function NotRequestedPlaceholder({ moduleName, onGenerate, generating }: NotRequ
 }
 
 export default function StudyHubPage() {
+  const { t, language } = useLanguage()
   const params = useParams()
   const router = useRouter()
   const lectureId = params.id as string
@@ -556,7 +559,7 @@ export default function StudyHubPage() {
 
   const formatLectureDate = (recordedAt: string, createdAt: string) => {
     const targetDate = new Date(recordedAt || createdAt)
-    return targetDate.toLocaleDateString('it-IT', {
+    return targetDate.toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', {
       day: 'numeric',
       month: 'long',
       year: 'numeric',
@@ -605,7 +608,7 @@ export default function StudyHubPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
-        <p className="text-slate-500 text-sm mt-2 font-semibold">Caricamento materiali studio...</p>
+        <p className="text-slate-500 text-sm mt-2 font-semibold">{t('hub.loading')}</p>
       </div>
     )
   }
@@ -616,15 +619,15 @@ export default function StudyHubPage() {
         <div className="w-16 h-16 bg-rose-50 text-rose-600 border border-rose-100 rounded-3xl flex items-center justify-center mb-4">
           <AlertCircle className="w-8 h-8" />
         </div>
-        <h2 className="text-xl font-black text-slate-805 mb-2">Errore caricamento</h2>
+        <h2 className="text-xl font-black text-slate-805 mb-2">{t('hub.error.loadTitle')}</h2>
         <p className="text-slate-500 text-sm max-w-xs mb-6 font-medium">
-          {error || 'Impossibile visualizzare i dati per questa lezione.'}
+          {error || t('hub.error.loadDesc')}
         </p>
         <button
           onClick={() => router.push('/home')}
           className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-6 py-3 rounded-xl text-sm transition-all cursor-pointer"
         >
-          Torna alla Home
+          {t('course.error.backToHome')}
         </button>
       </div>
     )
@@ -666,7 +669,7 @@ export default function StudyHubPage() {
         <button
           onClick={fetchLectureHubData}
           className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 hover:shadow-soft-sm transition-all duration-200 cursor-pointer"
-          title="Ricarica Dati"
+          title={t('hub.tooltip.reloadData')}
         >
           <RefreshCw className="w-4 h-4" />
         </button>
@@ -684,15 +687,15 @@ export default function StudyHubPage() {
             <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
               <div className="flex items-center gap-2 pl-0.5">
                 <BookOpen className="w-5 h-5 text-indigo-500" />
-                <span className="font-extrabold text-xs text-slate-850 uppercase tracking-wider">Info Lezione</span>
+                <span className="font-extrabold text-xs text-slate-850 uppercase tracking-wider">{t('hub.info.title')}</span>
               </div>
               <div className="flex flex-col gap-2.5 text-xs text-slate-655 pl-0.5">
                 <div className="flex justify-between items-center">
-                  <span>Data Registrazione</span>
+                  <span>{t('hub.info.dateLabel')}</span>
                   <span className="font-extrabold text-slate-800">{formatLectureDate(lecture.recorded_at, lecture.created_at)}</span>
                 </div>
                  <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
-                   <span>Corso</span>
+                   <span>{t('hub.info.course')}</span>
                    <span className="font-extrabold text-slate-800 truncate max-w-[140px]">{lecture.course_name}</span>
                  </div>
                  
@@ -710,8 +713,8 @@ export default function StudyHubPage() {
                      )}
                      <span>
                        {['queued', 'processing'].includes(lecture.status)
-                         ? 'Elaborazione in corso...'
-                         : 'Rielabora Audio'}
+                         ? t('hub.info.processing')
+                         : t('hub.info.reprocess')}
                      </span>
                    </button>
                  </div>
@@ -783,7 +786,7 @@ export default function StudyHubPage() {
             ) : (
               <div className="bg-indigo-50/50 border border-indigo-100/30 p-4.5 rounded-3xl flex items-center gap-3 text-xs text-indigo-700 font-semibold shadow-soft-sm text-left">
                 <Info className="w-4.5 h-4.5 text-indigo-500 shrink-0" />
-                <span>Nessun file audio registrato. Puoi comunque studiare i materiali a sinistra.</span>
+                <span>{t('hub.audio.none')}</span>
               </div>
             )}
 
@@ -798,12 +801,12 @@ export default function StudyHubPage() {
                 <div className="flex justify-between items-start gap-4">
                   <div className="flex flex-col gap-1">
                     <h3 className="font-extrabold text-sm text-slate-800">
-                      {isFailedPipeline ? 'Generazione materiali fallita' : 'Generazione materiali AI in corso...'}
+                      {isFailedPipeline ? t('hub.pipeline.failed') : t('hub.pipeline.processing')}
                     </h3>
                     <p className="text-xs text-slate-500 font-semibold leading-relaxed">
                       {isFailedPipeline
-                        ? 'Si è verificato un errore durante l’elaborazione della lezione. Riprova.'
-                        : 'StudyFlow AI sta elaborando l’audio per generare il riassunto strutturato, le flashcard e il quiz.'}
+                        ? t('hub.pipeline.failed.desc')
+                        : t('hub.pipeline.processing.desc')}
                     </p>
                   </div>
 
@@ -814,7 +817,7 @@ export default function StudyHubPage() {
                       className="bg-brand-gradient hover:opacity-95 text-white font-extrabold px-4.5 py-2.5 rounded-2xl text-xs flex items-center gap-1.5 shadow-md shadow-indigo-100 transition-all cursor-pointer hover:scale-[1.01]"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Riprova</span>
+                      <span>{t('hub.button.retry')}</span>
                     </button>
                   )}
                 </div>
@@ -822,10 +825,10 @@ export default function StudyHubPage() {
                 {/* Stepper Steps UI */}
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-2">
                   {[
-                    { type: 'transcript', label: '1. Trascrizione', desc: 'Trascrizione audio' },
-                    { type: 'summary', label: '2. Riassunto', desc: 'Riassunto strutturato' },
-                    { type: 'flashcards', label: '3. Flashcard', desc: 'Flashcard studio' },
-                    { type: 'quiz', label: '4. Quiz', desc: 'Autovalutazione' },
+                    { type: 'transcript', label: t('hub.step.transcript'), desc: t('hub.step.transcript.desc') },
+                    { type: 'summary', label: t('hub.step.summary'), desc: t('hub.step.summary.desc') },
+                    { type: 'flashcards', label: t('hub.step.flashcards'), desc: t('hub.step.flashcards.desc') },
+                    { type: 'quiz', label: t('hub.step.quiz'), desc: t('hub.step.quiz.desc') },
                   ].map((step, idx) => {
                     const dbType = step.type === 'transcript' ? 'transcription' : step.type
                     const matchedJob = jobs.find((j) => j.job_type === dbType)
@@ -861,11 +864,11 @@ export default function StudyHubPage() {
                             {step.label}
                           </span>
                           <span className="text-[10px] text-slate-455 leading-relaxed font-semibold">
-                            {stepStatus === 'not_requested' ? 'Non richiesto' : step.desc}
+                            {stepStatus === 'not_requested' ? t('hub.step.notRequested') : step.desc}
                           </span>
                           {stepStatus === 'failed' && matchedJob?.error_message && (
                             <span className="text-[9px] text-rose-600 font-bold mt-1 block break-words leading-normal bg-rose-50 border border-rose-100 rounded-lg p-1.5">
-                              Errore: {matchedJob.error_message}
+                              {t('hub.step.errorPrefix')} {matchedJob.error_message}
                             </span>
                           )}
                         </div>
@@ -879,10 +882,10 @@ export default function StudyHubPage() {
             {/* Tab Navigation (Instagram Profile Style) */}
             <div className="border-t border-b border-slate-100 bg-white flex items-center justify-around w-full z-10 -mx-6 px-4 sm:mx-0 sm:rounded-3xl sm:border">
               {[
-                { id: 'summary', label: 'Riassunto', icon: FileText },
-                { id: 'flashcards', label: 'Flashcard', icon: BookOpen },
-                { id: 'quiz', label: 'Quiz', icon: HelpCircle },
-                { id: 'transcript', label: 'Trascrizione', icon: HelpIcon },
+                { id: 'summary', label: t('hub.tabs.summary'), icon: FileText },
+                { id: 'flashcards', label: t('hub.tabs.flashcards'), icon: BookOpen },
+                { id: 'quiz', label: t('hub.tabs.quiz'), icon: HelpCircle },
+                { id: 'transcript', label: t('hub.tabs.transcript'), icon: HelpIcon },
               ].map((tab) => {
                 const Icon = tab.icon
                 const active = activeTab === tab.id
@@ -914,7 +917,7 @@ export default function StudyHubPage() {
                 <div className="flex flex-col gap-6">
               {!isSummaryRequested ? (
                 <NotRequestedPlaceholder
-                  moduleName="Riassunto"
+                  moduleName={t('hub.tabs.summary')}
                   onGenerate={() => handleGenerateModule('summary')}
                   generating={generatingModule === 'summary'}
                 />
@@ -940,14 +943,14 @@ export default function StudyHubPage() {
                   {/* Key Concepts List card */}
                   {summary.key_concepts && summary.key_concepts.length > 0 && (
                     <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-md text-left flex flex-col gap-3.5">
-                      <h3 className="font-black text-base text-slate-850 pl-0.5">
-                        Concetti Chiave
+                      <h3 className="font-black text-base text-slate-855 pl-0.5">
+                        {t('hub.summary.concepts')}
                       </h3>
                       <div className="flex flex-wrap gap-2.5">
                         {summary.key_concepts.map((concept, idx) => (
                           <span
                             key={idx}
-                            className="bg-indigo-50/70 border border-indigo-100/40 text-indigo-650 px-4 py-2 rounded-2xl text-xs font-extrabold hover:bg-brand-gradient hover:text-white hover:border-transparent transition-all duration-200 cursor-default"
+                            className="bg-indigo-50/70 border border-indigo-100/40 text-indigo-655 px-4 py-2 rounded-2xl text-xs font-extrabold hover:bg-brand-gradient hover:text-white hover:border-transparent transition-all duration-200 cursor-default"
                           >
                             {concept}
                           </span>
@@ -958,7 +961,7 @@ export default function StudyHubPage() {
                 </>
               ) : (
                 <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md">
-                  <p className="text-sm font-semibold text-slate-500">Nessun riassunto disponibile al momento.</p>
+                  <p className="text-sm font-semibold text-slate-500">{t('hub.summary.noContent')}</p>
                 </div>
               )}
             </div>
@@ -966,11 +969,10 @@ export default function StudyHubPage() {
 
           {/* TAB 2: FLASHCARDS CAROUSEL */}
           {activeTab === 'flashcards' && (
-            <div className="flex flex-col gap-6">
-              {isFlashcardJobActive ? (
+            <div className="flex flex-col gap-6">               {isFlashcardJobActive ? (
                 <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
-                  <p className="text-sm font-semibold text-slate-500">Generazione delle nuove flashcard in corso...</p>
+                  <p className="text-sm font-semibold text-slate-500">{t('hub.flashcards.generating')}</p>
                 </div>
               ) : flashcards.length > 0 ? (
                 <div className="flex flex-col items-center gap-6">
@@ -978,14 +980,14 @@ export default function StudyHubPage() {
                   {/* Header & Regeneration action */}
                   <div className="flex justify-between items-center w-full max-w-sm px-2">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      Flashcard {currentFlashcardIdx + 1} di {flashcards.length}
+                      {t('hub.flashcards.progress', { current: currentFlashcardIdx + 1, total: flashcards.length })}
                     </span>
                     <button
                       onClick={() => handleGenerateModule('flashcards')}
                       className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100/50 py-1.5 px-3 rounded-xl transition-all duration-200 cursor-pointer shadow-soft-sm hover:scale-[1.01]"
                     >
                       <RefreshCw className="w-3 h-3" />
-                      <span>Genera Nuove</span>
+                      <span>{t('hub.flashcards.regenerate')}</span>
                     </button>
                   </div>
 
@@ -1002,26 +1004,26 @@ export default function StudyHubPage() {
                       {/* FRONT CARD: Question */}
                       <div className="absolute inset-0 bg-white border border-slate-150 rounded-3xl shadow-soft-md p-6 flex flex-col items-center justify-center text-center backface-hidden">
                         <span className="text-[10px] font-extrabold text-indigo-650 uppercase tracking-widest mb-3">
-                          Domanda
+                          {t('hub.flashcards.frontTitle')}
                         </span>
                         <p className="font-black text-sm sm:text-base text-slate-800 max-w-xs leading-snug">
                           {flashcards[currentFlashcardIdx].question}
                         </p>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-5 absolute bottom-4 animate-pulse">
-                          Clicca per girare
+                          {t('hub.flashcards.flipHint')}
                         </span>
                       </div>
 
                       {/* BACK CARD: Answer */}
                       <div className="absolute inset-0 bg-brand-gradient border border-slate-200/20 text-white rounded-3xl shadow-soft-lg p-6 flex flex-col items-center justify-center text-center backface-hidden rotateY-180">
                         <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-3">
-                          Risposta Corretta
+                          {t('hub.flashcards.backTitle')}
                         </span>
                         <p className="font-extrabold text-sm sm:text-base max-w-xs leading-snug">
                           {flashcards[currentFlashcardIdx].answer}
                         </p>
                         <span className="text-[10px] font-bold text-white/70 uppercase tracking-wider mt-5 absolute bottom-4">
-                          Clicca per tornare alla domanda
+                          {t('hub.flashcards.flipBackHint')}
                         </span>
                       </div>
                     </div>
@@ -1033,11 +1035,11 @@ export default function StudyHubPage() {
                       onClick={() => updateCardMastery(flashcards[currentFlashcardIdx].id, false)}
                       className={`w-1/2 py-3 px-4 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
                         flashcards[currentFlashcardIdx].status === 'unknown'
-                          ? 'bg-rose-50 border-rose-200 text-rose-650 shadow-soft-sm'
+                          ? 'bg-rose-50 border-rose-200 text-rose-655 shadow-soft-sm'
                           : 'bg-white border-slate-250 text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      Ancora da studiare
+                      {t('hub.flashcards.mastery.unknown')}
                     </button>
                     <button
                       onClick={() => updateCardMastery(flashcards[currentFlashcardIdx].id, true)}
@@ -1047,7 +1049,7 @@ export default function StudyHubPage() {
                           : 'bg-white border-slate-250 text-slate-500 hover:bg-slate-50'
                       }`}
                     >
-                      Conosciuta
+                      {t('hub.flashcards.mastery.known')}
                     </button>
                   </div>
 
@@ -1062,7 +1064,7 @@ export default function StudyHubPage() {
                       className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-500 hover:text-indigo-650 disabled:opacity-30 disabled:hover:text-slate-500 cursor-pointer"
                     >
                       <ChevronLeft className="w-4 h-4" />
-                      <span>Precedente</span>
+                      <span>{t('hub.flashcards.nav.prev')}</span>
                     </button>
 
                     <button
@@ -1073,7 +1075,7 @@ export default function StudyHubPage() {
                       }}
                       className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-500 hover:text-indigo-650 disabled:opacity-30 disabled:hover:text-slate-500 cursor-pointer"
                     >
-                      <span>Successiva</span>
+                      <span>{t('hub.flashcards.nav.next')}</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -1081,13 +1083,13 @@ export default function StudyHubPage() {
                 </div>
               ) : !isFlashcardsRequested ? (
                 <NotRequestedPlaceholder
-                  moduleName="Flashcard"
+                  moduleName={t('hub.tabs.flashcards')}
                   onGenerate={() => handleGenerateModule('flashcards')}
                   generating={generatingModule === 'flashcards'}
                 />
               ) : (
                 <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md">
-                  <p className="text-sm font-semibold text-slate-500">Nessuna flashcard disponibile al momento.</p>
+                  <p className="text-sm font-semibold text-slate-500">{t('hub.flashcards.noContent')}</p>
                 </div>
               )}
             </div>
@@ -1099,20 +1101,20 @@ export default function StudyHubPage() {
               {isQuizJobActive ? (
                 <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
-                  <p className="text-sm font-semibold text-slate-500">Generazione del nuovo quiz in corso...</p>
+                  <p className="text-sm font-semibold text-slate-500">{t('hub.quiz.generating')}</p>
                 </div>
               ) : quizQuestions.length > 0 ? (
                 <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-3xl shadow-soft-md text-left">
                   
                   {/* Quiz header with refresh button */}
                   <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
-                    <h3 className="font-extrabold text-sm text-slate-700">Quiz di Autovalutazione</h3>
+                    <h3 className="font-extrabold text-sm text-slate-700">{t('hub.quiz.title')}</h3>
                     <button
                       onClick={() => handleGenerateModule('quiz')}
                       className="text-xs font-bold text-indigo-650 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      <span>Genera Nuovo Quiz</span>
+                      <span>{t('hub.quiz.regenerate')}</span>
                     </button>
                   </div>
                   
@@ -1121,9 +1123,9 @@ export default function StudyHubPage() {
                     <div className="bg-gradient-to-r from-slate-50 to-indigo-50/50 p-6 rounded-2xl flex flex-col items-center text-center gap-3 border border-indigo-100/50 mb-6">
                       <Award className="w-10 h-10 text-indigo-650" />
                       <div className="flex flex-col gap-0.5">
-                        <h4 className="font-extrabold text-base text-slate-805">Quiz Completato!</h4>
+                        <h4 className="font-extrabold text-base text-slate-805">{t('hub.quiz.completed')}</h4>
                         <p className="text-2xl font-black text-brand-gradient mt-1">
-                          {quizScore} / {quizQuestions.length} Corrette
+                          {t('hub.quiz.score', { score: quizScore, total: quizQuestions.length })}
                         </p>
                       </div>
                       <div className="flex flex-col gap-2 mt-2 w-full max-w-xs">
@@ -1132,7 +1134,7 @@ export default function StudyHubPage() {
                             onClick={handleResetQuiz}
                             className="w-1/2 bg-white border border-slate-250 text-slate-700 font-extrabold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-soft-sm"
                           >
-                            Rifai il Quiz
+                            {t('hub.quiz.retry')}
                           </button>
                           <button
                             onClick={() => {
@@ -1141,7 +1143,7 @@ export default function StudyHubPage() {
                             }}
                             className="w-1/2 bg-brand-gradient hover-bg-brand-gradient text-white font-extrabold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-md shadow-indigo-100"
                           >
-                            Rivedi Errori
+                            {t('hub.quiz.reviewErrors')}
                           </button>
                         </div>
                         <button
@@ -1149,7 +1151,7 @@ export default function StudyHubPage() {
                           className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-2.5 px-3 rounded-xl text-xs cursor-pointer shadow-sm hover:shadow flex items-center justify-center gap-1"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Genera Nuovo Quiz</span>
+                          <span>{t('hub.quiz.regenerate')}</span>
                         </button>
                       </div>
                     </div>
@@ -1169,7 +1171,7 @@ export default function StudyHubPage() {
                             : 'bg-white border-slate-200 text-slate-500'
                         }`}
                       >
-                        Tutte le domande ({quizQuestions.length})
+                        {t('hub.quiz.filter.allWithCount', { count: quizQuestions.length })}
                       </button>
                       <button
                         onClick={() => {
@@ -1182,9 +1184,9 @@ export default function StudyHubPage() {
                             : 'bg-white border-slate-200 text-slate-500'
                         }`}
                       >
-                        Solo gli errori ({
-                          quizQuestions.filter((q) => quizAnswers[q.id] !== q.correct_option_index).length
-                        })
+                        {t('hub.quiz.filter.mistakesWithCount', {
+                          count: quizQuestions.filter((q) => quizAnswers[q.id] !== q.correct_option_index).length
+                        })}
                       </button>
                     </div>
                   )}
@@ -1199,7 +1201,7 @@ export default function StudyHubPage() {
                       return (
                         <div className="text-center py-10 flex flex-col items-center gap-2">
                           <CheckCircle className="w-10 h-10 text-emerald-500" />
-                          <p className="text-sm font-extrabold text-slate-805">Nessun errore commesso! Ottimo lavoro.</p>
+                          <p className="text-sm font-extrabold text-slate-850">{t('hub.quiz.noErrors')}</p>
                           <button
                             onClick={() => {
                               setQuizFilter('all')
@@ -1207,7 +1209,7 @@ export default function StudyHubPage() {
                             }}
                             className="text-xs text-indigo-650 hover:underline font-bold mt-1 cursor-pointer"
                           >
-                            Rivedi tutte le domande
+                            {t('hub.quiz.reviewAll')}
                           </button>
                         </div>
                       )
@@ -1219,8 +1221,8 @@ export default function StudyHubPage() {
                       <div className="flex flex-col gap-5">
                         {/* Question title index */}
                         <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5">
-                          <span>Autovalutazione</span>
-                          <span>Domanda {currentQuizWizardStep + 1} di {filteredQuestions.length}</span>
+                          <span>{t('hub.step.quiz.desc')}</span>
+                          <span>{t('hub.quiz.questionCounter', { current: currentQuizWizardStep + 1, total: filteredQuestions.length })}</span>
                         </div>
 
                         {/* Question Text */}
@@ -1275,7 +1277,7 @@ export default function StudyHubPage() {
                             className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-500 hover:text-indigo-650 disabled:opacity-30 cursor-pointer"
                           >
                             <ChevronLeft className="w-4 h-4" />
-                            <span>Precedente</span>
+                            <span>{t('hub.flashcards.nav.prev')}</span>
                           </button>
 
                           {/* Submit / Next step triggers */}
@@ -1285,7 +1287,7 @@ export default function StudyHubPage() {
                                 onClick={handleSubmitQuiz}
                                 className="bg-brand-gradient hover-bg-brand-gradient text-white font-extrabold py-2.5 px-4.5 rounded-xl text-xs shadow-md shadow-indigo-100 cursor-pointer hover:scale-[1.01]"
                               >
-                                Vedi Risultati
+                                {t('hub.quiz.submit')}
                               </button>
                             ) : null
                           ) : (
@@ -1293,7 +1295,7 @@ export default function StudyHubPage() {
                               onClick={() => setCurrentQuizWizardStep((prev) => prev + 1)}
                               className="inline-flex items-center gap-1.5 text-xs font-extrabold text-indigo-650 hover:underline cursor-pointer"
                             >
-                              <span>Avanti</span>
+                              <span>{t('hub.quiz.next')}</span>
                               <ChevronRight className="w-4 h-4" />
                             </button>
                           )}
@@ -1306,13 +1308,13 @@ export default function StudyHubPage() {
                 </div>
               ) : !isQuizRequested ? (
                 <NotRequestedPlaceholder
-                  moduleName="Quiz"
+                  moduleName={t('hub.tabs.quiz')}
                   onGenerate={() => handleGenerateModule('quiz')}
                   generating={generatingModule === 'quiz'}
                 />
               ) : (
                 <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md">
-                  <p className="text-sm font-semibold text-slate-500">Nessun quiz disponibile al momento.</p>
+                  <p className="text-sm font-semibold text-slate-500">{t('hub.quiz.noContent')}</p>
                 </div>
               )}
             </div>
@@ -1324,7 +1326,7 @@ export default function StudyHubPage() {
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
                 <h3 className="font-black text-base text-slate-850">
-                  Trascrizione Completa
+                  {t('hub.transcript.title')}
                 </h3>
                 
                 {/* Simple Local Search Bar */}
@@ -1333,7 +1335,7 @@ export default function StudyHubPage() {
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                     <input
                       type="text"
-                      placeholder="Cerca nella trascrizione..."
+                      placeholder={t('hub.transcript.searchPlaceholder')}
                       value={transcriptSearch}
                       onChange={(e) => setTranscriptSearch(e.target.value)}
                       className="w-full text-xs pl-9 pr-8 py-2.5 rounded-xl bg-slate-50 border border-slate-250 text-slate-700 outline-none focus:border-indigo-500 font-semibold"
@@ -1341,7 +1343,7 @@ export default function StudyHubPage() {
                     {transcriptSearch && (
                       <button
                         onClick={() => setTranscriptSearch('')}
-                        className="absolute right-2.5 top-2.5 p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-650 cursor-pointer"
+                        className="absolute right-2.5 top-2.5 p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-655 cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1352,14 +1354,14 @@ export default function StudyHubPage() {
 
               {lecture.transcript_text ? (
                 transcriptSearch.trim() && !lecture.transcript_text.toLowerCase().includes(transcriptSearch.toLowerCase()) ? (
-                  <div className="text-center text-slate-450 py-10 flex flex-col items-center justify-center gap-3">
+                  <div className="text-center text-slate-455 py-10 flex flex-col items-center justify-center gap-3">
                     <AlertCircle className="w-8 h-8 text-slate-300 animate-pulse" />
-                    <p className="text-xs font-bold text-slate-500">Nessun risultato trovato per "{transcriptSearch}"</p>
+                    <p className="text-xs font-bold text-slate-500">{t('hub.transcript.noResults', { query: transcriptSearch })}</p>
                     <button
                       onClick={() => setTranscriptSearch('')}
                       className="text-xs text-indigo-650 hover:underline font-bold cursor-pointer"
                     >
-                      Cancella ricerca
+                      {t('hub.transcript.clearSearch')}
                     </button>
                   </div>
                 ) : (
@@ -1373,7 +1375,7 @@ export default function StudyHubPage() {
                 )
               ) : (
                 <div className="text-center text-slate-450 py-6 text-sm font-semibold">
-                  Nessuna trascrizione disponibile.
+                  {t('hub.transcript.noContent')}
                 </div>
               )}
             </div>

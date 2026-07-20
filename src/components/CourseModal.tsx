@@ -5,6 +5,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import { X, Loader2, AlertCircle } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface CourseModalProps {
   isOpen: boolean
@@ -33,6 +34,7 @@ export default function CourseModal({
   onSuccess,
   initialData,
 }: CourseModalProps) {
+  const { t } = useLanguage()
   const [name, setName] = useState('')
   const [professor, setProfessor] = useState('')
   const [selectedColor, setSelectedColor] = useState(colorPresets[0].hex)
@@ -69,7 +71,7 @@ export default function CourseModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || name.trim().length < 2) {
-      setError('Il nome del corso deve essere lungo almeno 2 caratteri.')
+      setError(t('courseModal.error.nameLength'))
       return
     }
 
@@ -84,7 +86,7 @@ export default function CourseModal({
       } = await supabase.auth.getUser()
 
       if (userError || !user) {
-        setError('Utente non autenticato. Effettua nuovamente l’accesso.')
+        setError(t('courseModal.error.unauthenticated'))
         setLoading(false)
         return
       }
@@ -101,7 +103,7 @@ export default function CourseModal({
           .eq('id', initialData.id)
 
         if (updateError) {
-          setError('Impossibile aggiornare il corso. Riprova.')
+          setError(t('courseModal.error.update'))
         } else {
           onSuccess()
           onClose()
@@ -116,7 +118,7 @@ export default function CourseModal({
           .single()
 
         if (wsError || !workspace) {
-          setError('Impossibile trovare il tuo workspace. Contatta il supporto.')
+          setError(t('courseModal.error.workspace'))
           setLoading(false)
           return
         }
@@ -132,7 +134,7 @@ export default function CourseModal({
             .maybeSingle()
 
           if (!checkError && existingCourse) {
-            setError(`Esiste già un corso con il nome "${existingCourse.name}". Premi nuovamente "Crea Corso" per confermare la creazione del duplicato.`)
+            setError(t('courseModal.error.duplicate', { name: existingCourse.name }))
             setShowDuplicateWarning(true)
             setLoading(false)
             return
@@ -149,14 +151,14 @@ export default function CourseModal({
         })
 
         if (insertError) {
-          setError('Si è verificato un errore durante la creazione del corso.')
+          setError(t('courseModal.error.create'))
         } else {
           onSuccess()
           onClose()
         }
       }
     } catch {
-      setError('Errore di connessione. Controlla la tua rete.')
+      setError(t('courseModal.error.connection'))
     } finally {
       setLoading(false)
     }
@@ -169,7 +171,7 @@ export default function CourseModal({
         {/* Header */}
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-black text-slate-900">
-            {isEdit ? 'Modifica Corso' : 'Crea Nuovo Corso'}
+            {isEdit ? t('courseModal.editTitle') : t('courseModal.newTitle')}
           </h2>
           <button
             onClick={onClose}
@@ -191,7 +193,7 @@ export default function CourseModal({
         <form onSubmit={handleSubmit} className="flex flex-col gap-4.5">
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest pl-0.5">
-              Nome Corso <span className="text-rose-500">*</span>
+              {t('courseModal.nameLabel')} <span className="text-rose-500">*</span>
             </label>
             <input
               type="text"
@@ -199,21 +201,21 @@ export default function CourseModal({
               disabled={loading}
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="es. Analisi Matematica I"
+              placeholder={t('courseModal.placeholderName')}
               className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-2xl text-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all duration-200"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest pl-0.5">
-              Professore
+              {t('courseModal.professorLabel')}
             </label>
             <input
               type="text"
               disabled={loading}
               value={professor}
               onChange={(e) => setProfessor(e.target.value)}
-              placeholder="es. Prof. Giovanni Rossi"
+              placeholder={t('courseModal.placeholderProf')}
               className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-2xl text-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all duration-200"
             />
           </div>
@@ -221,7 +223,7 @@ export default function CourseModal({
           {/* Color Presets */}
           <div className="flex flex-col gap-2">
             <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest pl-0.5">
-              Colore Corso
+              {t('courseModal.colorLabel')}
             </label>
             <div className="flex items-center gap-3 py-1">
               {colorPresets.map((preset) => (
@@ -254,9 +256,9 @@ export default function CourseModal({
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : isEdit ? (
-              'Salva Modifiche'
+              t('courseModal.button.save')
             ) : (
-              'Crea Corso'
+              t('courseModal.button.create')
             )}
           </button>
         </form>

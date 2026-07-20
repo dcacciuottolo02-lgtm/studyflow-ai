@@ -6,8 +6,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import { Mail, ArrowLeft, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function ForgotPasswordPage() {
+  const { t } = useLanguage()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -16,18 +18,18 @@ export default function ForgotPasswordPage() {
   const mapError = (message: string) => {
     const msg = message.toLowerCase()
     if (msg.includes('user not found')) {
-      return 'Nessun account registrato con questo indirizzo e-mail.'
+      return t('auth.forgot.error.notFound')
     }
     if (msg.includes('too many requests') || msg.includes('rate limit')) {
-      return 'Troppe richieste. Attendi prima di inviare un nuovo link.'
+      return t('auth.forgot.error.rateLimit')
     }
-    return 'Si è verificato un errore durante l’invio. Riprova.'
+    return t('auth.forgot.error.generic')
   }
 
   const handleResetRequest = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) {
-      setError('Inserisci il tuo indirizzo e-mail.')
+      setError(t('auth.forgot.error.missingEmail'))
       return
     }
 
@@ -44,10 +46,10 @@ export default function ForgotPasswordPage() {
       if (resetError) {
         setError(mapError(resetError.message))
       } else {
-        setSuccess('Link di ripristino inviato! Controlla la tua e-mail per accedere.')
+        setSuccess(t('auth.forgot.success'))
       }
     } catch {
-      setError('Errore di connessione. Controlla la tua rete.')
+      setError(t('auth.forgot.error.connection'))
     } finally {
       setLoading(false)
     }
@@ -60,10 +62,10 @@ export default function ForgotPasswordPage() {
         {/* Header */}
         <div className="flex flex-col gap-2 text-center">
           <h1 className="text-3xl font-black tracking-tight text-brand-gradient">
-            Recupero Password
+            {t('auth.forgot.title')}
           </h1>
           <p className="text-slate-500 text-sm font-semibold">
-            Ti invieremo un link per accedere e modificare la tua password
+            {t('auth.forgot.subtitle')}
           </p>
         </div>
 
@@ -76,7 +78,7 @@ export default function ForgotPasswordPage() {
         )}
 
         {success && (
-          <div className="flex items-start gap-2.5 bg-emerald-50 text-emerald-605 border border-emerald-100 p-4 rounded-xl text-sm transition-all duration-200">
+          <div className="flex items-start gap-2.5 bg-emerald-50 text-emerald-600 border border-emerald-100 p-4 rounded-xl text-sm transition-all duration-200">
             <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
             <span className="font-semibold">{success}</span>
           </div>
@@ -86,7 +88,7 @@ export default function ForgotPasswordPage() {
         <form onSubmit={handleResetRequest} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-              Indirizzo E-mail
+              {t('auth.forgot.email')}
             </label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
@@ -112,7 +114,7 @@ export default function ForgotPasswordPage() {
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              'Invia link di accesso'
+              t('auth.forgot.submit')
             )}
           </button>
         </form>
@@ -124,7 +126,7 @@ export default function ForgotPasswordPage() {
             className="inline-flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-indigo-650 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Torna al login</span>
+            <span>{t('auth.forgot.back')}</span>
           </Link>
         </div>
 

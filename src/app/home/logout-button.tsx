@@ -6,9 +6,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { LogOut, Loader2 } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function LogoutButton() {
   const router = useRouter()
+  const { t } = useLanguage()
   const [loading, setLoading] = useState(false)
 
   const handleLogout = async () => {
@@ -19,7 +21,7 @@ export default function LogoutButton() {
       router.refresh()
       router.push('/login')
     } catch {
-      alert('Impossibile disconnettersi. Riprova.')
+      alert(t('profile.logout.error'))
       setLoading(false)
     }
   }
@@ -35,7 +37,7 @@ export default function LogoutButton() {
       ) : (
         <LogOut className="w-4 h-4" />
       )}
-      <span>Disconnetti</span>
+      <span>{t('profile.logout')}</span>
     </button>
   )
 }
