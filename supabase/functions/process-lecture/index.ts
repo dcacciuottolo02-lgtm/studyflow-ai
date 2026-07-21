@@ -63,6 +63,20 @@ async function callGeminiWithRetry<T>(
   throw lastError
 }
 
+function validateKeywords(text: string, transcript: string): boolean {
+  if (!text || !transcript) return false
+  const normalize = (t: string) => 
+    t.toLowerCase()
+     .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?'"]/g, " ")
+     .split(/\s+/)
+     .filter(w => w.length > 4)
+
+  const transcriptWords = new Set(normalize(transcript))
+  const textWords = normalize(text)
+
+  return textWords.some(word => transcriptWords.has(word))
+}
+
 async function runPipeline(
   lectureId: string,
   accessToken: string,
@@ -161,10 +175,18 @@ async function runPipeline(
           'Fornisci una trascrizione accurata, fedele e pulita del seguente file audio. Rimuovi solo i riempitivi verbali eccessivi (es. "ehm", "uhm", ripetizioni balbettate) ma mantieni intatto tutto il resto del contenuto, dei concetti e della terminologia spiegata.'
 
         const response = await callGeminiWithRetry(
-          () => model.generateContent([
-            { text: transcriptionPrompt },
-            { inlineData: { data: base64Audio, mimeType: audioMimeType } },
-          ]),
+          () => model.generateContent({
+            contents: [{
+              role: 'user',
+              parts: [
+                { text: transcriptionPrompt },
+                { inlineData: { data: base64Audio, mimeType: audioMimeType } },
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.1,
+            }
+          }),
           { jobLabel: 'Job 1 Transcription', supabase, lectureId, jobType: 'transcription' }
         )
 
@@ -243,6 +265,20 @@ async function runPipeline(
       studyMaterialId = newSM.id
     }
 
+    let learningObjectives: string[] = []
+    try {
+      const { data: existingSum } = await supabase
+        .from('summaries')
+        .select('learning_objectives')
+        .eq('study_material_id', studyMaterialId)
+        .maybeSingle()
+      if (existingSum && Array.isArray(existingSum.learning_objectives)) {
+        learningObjectives = existingSum.learning_objectives
+      }
+    } catch (err) {
+      console.warn('[AI Edge] Failed to fetch existing learning objectives:', err)
+    }
+
     // =========================================================================
     // JOBS 2, 3, 4: SUMMARY, FLASHCARDS, QUIZ
     // =========================================================================
@@ -278,30 +314,40 @@ async function runPipeline(
                 description: `A key concept or term from the lecture, written entirely in ${targetLangLabel}.` 
               },
             },
+            learning_objectives: {
+              type: 'array',
+              items: { type: 'string' },
+              description: `List of 3-5 learning objectives of this lecture, written entirely in ${targetLangLabel}.`
+            }
           },
-          required: ['content', 'key_concepts'],
+          required: ['content', 'key_concepts', 'learning_objectives'],
         }
 
-        const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite.
-IMPORTANTE: Genera il riassunto dell'intera lezione ed i relativi concetti chiave esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+        const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}]
+Sei un assistente di studio universitario di livello Elite. Il tuo obiettivo è generare un riassunto accademico altamente efficace basato sulla trascrizione fornita.
 
-Basandoti sulla trascrizione fornita, genera un riassunto della lezione estremamente dettagliato, accademico, ben organizzato e visivamente ordinato in formato Markdown.
+IMPORTANTE - REGOLE DI ACCURATEZZA (ANTI-ALLUCINAZIONE):
+- Ogni concetto, spiegazione o dettaglio deve essere rigorosamente riconducibile a informazioni realmente presenti nella trascrizione.
+- Non aggiungere fatti, esempi esterni, concetti o dettagli teorici che non siano esplicitamente menzionati nel testo, anche se li ritieni pertinenti o corretti.
 
-STRUTTURA E REGOLE DI FORMATTAZIONE RICHIESTE:
+IMPORTANTE - LINGUA DI OUTPUT:
+- Genera l'intero riassunto ed i relativi concetti chiave ed obiettivi di apprendimento esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+
+FASI DI ELABORAZIONE:
+1. **Identifica gli Obiettivi di Apprendimento**: Analizza il testo e individua da 3 a 5 obiettivi di apprendimento fondamentali (es. "Lo studente deve saper spiegare la differenza tra X e Y").
+2. **Struttura il Riassunto**: Redigi il riassunto in modo da spiegare e coprire esplicitamente ciascuno degli obiettivi identificati.
+
+STRUTTURA E REGOLE DI FORMATTAZIONE DEL MARKDOWN (nel campo 'content'):
 1. **Titolo della Lezione**: Inizia con un titolo accattivante e chiaro usando l'intestazione markdown (es. '# Titolo della Lezione').
-2. **Tabella dei Contenuti / Indice**: Crea un piccolo indice testuale all'inizio per mostrare la struttura del riassunto.
-3. **Introduction**: Fornisci un'introduzione fluida, ricca di contesto ed elegante (minimo 150 parole). Usa del testo in grassetto per evidenziare le parole chiave principali.
-4. **Key Concepts (Concetti Chiave)**: Per ogni concetto chiave menzionato nella lezione:
+2. **Tabella dei Contenuti / Indice**: Crea un piccolo indice testuale all'inizio.
+3. **Obiettivi di Apprendimento**: Crea una sezione '## ${contentLanguage === 'it' ? 'Obiettivi di Apprendimento' : 'Learning Objectives'}' ed elenca gli obiettivi identificati come lista puntata.
+4. **Introduction**: Fornisci un'introduzione fluida, ricca di contesto ed elegante (minimo 150 parole). Usa del testo in grassetto per evidenziare le parole chiave principali.
+5. **Key Concepts (Concetti Chiave)**: Per ogni concetto chiave menzionato nella lezione:
    - Crea una sotto-sezione con intestazione '### [Nome del Concetto]'
    - Spiega il concetto in modo approfondito, descrivendo la sua definizione, il suo funzionamento ed eventuali esempi pratici menzionati.
-   - Utilizza elenchi puntati strutturati, tabelle di confronto (se applicabili) ed evidenziazioni grafiche.
-5. **Important Notes (Note Importanti)**: Aggiungi consigli pratici, eccezioni, formule o note di approfondimento strutturate con elenchi puntati e spiegazioni chiare.
-6. **Exam Focus (Focus Esame)**: Elenca in modo ordinato e schematico le potenziali domande d'esame, i punti critici da memorizzare e i suggerimenti strategici per superare la prova su questo argomento.
-
-REGOLE GENERALI:
-- Mantieni un tono accademico, formale ma facilmente comprensibile.
-- Evita paragrafi troppo lunghi e noiosi; usa elenchi, grassetti strategici e paragrafi distanziati per rendere la lettura riposante e piacevole.
-- Non includere placeholders o testo vuoto.
+   - Utilizza elenchi puntati strutturati, tabelle di confronto ed evidenziazioni grafiche.
+6. **Important Notes (Note Importanti)**: Aggiungi consigli pratici, eccezioni, formule o note di approfondimento strutturate con elenchi puntati.
+7. **Exam Focus (Focus Esame)**: Elenca in modo ordinato e schematico le potenziali domande d'esame e i punti critici da memorizzare.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
@@ -314,12 +360,15 @@ Trascrizione:
             generationConfig: {
               responseMimeType: 'application/json',
               responseSchema: summarySchema as any,
+              temperature: 0.3,
             },
           }),
           { jobLabel: 'Job 2 Summary', supabase, lectureId, jobType: 'summary' }
         )
 
         const summaryJson = JSON.parse(sumResult.response.text())
+        learningObjectives = summaryJson.learning_objectives || []
+
         const { data: existingSum } = await supabase
           .from('summaries')
           .select('id')
@@ -332,6 +381,7 @@ Trascrizione:
             .update({
               content: summaryJson.content,
               key_concepts: summaryJson.key_concepts,
+              learning_objectives: summaryJson.learning_objectives,
               version: 1,
             })
             .eq('id', existingSum.id)
@@ -340,6 +390,7 @@ Trascrizione:
             study_material_id: studyMaterialId,
             content: summaryJson.content,
             key_concepts: summaryJson.key_concepts,
+            learning_objectives: summaryJson.learning_objectives,
           })
         }
 
@@ -396,17 +447,28 @@ Trascrizione:
           required: ['flashcards'],
         }
 
-        const flashcardsPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
-IMPORTANTE: Genera tutte le domande e le risposte delle flashcard esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+        const flashcardsPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}]
+Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
 
-Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta di alta qualità pedagogica.
+IMPORTANTE - REGOLE DI ACCURATEZZA (ANTI-ALLUCINAZIONE):
+- Ogni domanda e risposta deve essere rigorosamente riconducibile a informazioni realmente presenti nella trascrizione.
+- Non includere definizioni esterne o dettagli non presenti nel testo.
+
+IMPORTANTE - LINGUA DI OUTPUT:
+- Genera tutte le domande e le risposte esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}.
+
+OBIETTIVI DI APPRENDIMENTO RIFERIMENTO:
+${learningObjectives.length > 0 
+  ? learningObjectives.map((obj, i) => `- Obiettivo ${i+1}: ${obj}`).join('\n')
+  : `[Identifica prima da 3 a 5 obiettivi di apprendimento fondamentali basandoti sulla trascrizione sotto fornita]`
+}
 
 REGOLE OBBLIGATORIE PER LE FLASHCARD:
-- Ogni domanda DEVE testare la COMPRENSIONE di un concetto, una definizione, una relazione causale, un meccanismo o un'applicazione pratica.
-- VIETATO creare domande sull'ordine, la sequenza o la posizione in cui gli argomenti sono stati presentati nella lezione (es. "qual è il primo/secondo/terzo elemento menzionato?", "in che ordine sono stati presentati X e Y?").
-- Preferisci domande come: "Cos'è [concetto]?", "Qual è la differenza tra [X] e [Y]?", "Perché [concetto] è importante?", "Come si applica [concetto] in [contesto]?", "Quale problema risolve [concetto]?".
-- Se la lezione menziona più concetti dello stesso tipo (es. 4 elementi, 3 fasi, ecc.), crea una flashcard per ciascuno che ne testi la comprensione INDIVIDUALE (definizione, funzione, importanza), NON la posizione nella lista.
-- Le risposte devono essere chiare, concise e auto-esplicative: uno studente deve poter capire la risposta anche senza rileggere la trascrizione.
+- Genera un set di 10-15 flashcard domanda/risposta di alta qualità pedagogica.
+- Ciascuna flashcard deve essere esplicitamente mirata a verificare la comprensione di uno degli Obiettivi di Apprendimento sopra elencati (o identificati).
+- Ogni domanda DEVE testare la COMPRENSIONE di un concetto, una definizione, una relazione causale, un meccanismo o un'applicazione pratica correlati all'obiettivo.
+- VIETATO creare domande sull'ordine, la sequenza o la posizione in cui gli argomenti sono stati presentati nella lezione (es. "qual è il primo/secondo elemento menzionato?").
+- Le risposte devono essere chiare, concise e auto-esplicative.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
@@ -419,12 +481,27 @@ Trascrizione:
             generationConfig: {
               responseMimeType: 'application/json',
               responseSchema: flashcardsSchema as any,
+              temperature: 0.3,
             },
           }),
           { jobLabel: 'Job 3 Flashcards', supabase, lectureId, jobType: 'flashcards' }
         )
 
         const fcJson = JSON.parse(fcResult.response.text())
+
+        // Best effort post-generation validation of keywords
+        if (Array.isArray(fcJson.flashcards)) {
+          fcJson.flashcards.forEach((fc: any, index: number) => {
+            const qValid = validateKeywords(fc.question, transcriptText)
+            const aValid = validateKeywords(fc.answer, transcriptText)
+            if (!qValid && !aValid) {
+              console.warn(
+                `[Validation Warning] Flashcard #${index + 1} seems disconnected from the transcript. ` +
+                `Question: "${fc.question}", Answer: "${fc.answer}"`
+              )
+            }
+          })
+        }
         // Get the latest version number
         const { data: existingSets } = await supabase
           .from('flashcard_sets')
@@ -513,18 +590,31 @@ Trascrizione:
           required: ['quiz'],
         }
 
-        const quizPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
-IMPORTANTE: Genera tutte le domande e le opzioni di risposta del quiz esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+        const quizPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}]
+Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
 
-Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla di alta qualità pedagogica per l'autovalutazione dello studente. Ogni domanda deve avere esattamente 4 opzioni di risposta ed un indicatore dell'indice dell'opzione corretta (da 0 a 3).
+IMPORTANTE - REGOLE DI ACCURATEZZA (ANTI-ALLUCINAZIONE):
+- Ogni domanda, opzione corretta e distrattore deve essere rigorosamente riconducibile a informazioni realmente presenti nella trascrizione.
+- Non inserire fatti esterni o dettagli teorici che non siano stati spiegati direttamente nell'audio/testo fornito.
+
+IMPORTANTE - LINGUA DI OUTPUT:
+- Genera tutte le domande ed opzioni di risposta del quiz esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}.
+
+OBIETTIVI DI APPRENDIMENTO RIFERIMENTO:
+${learningObjectives.length > 0 
+  ? learningObjectives.map((obj, i) => `- Obiettivo ${i+1}: ${obj}`).join('\n')
+  : `[Identifica prima da 3 a 5 obiettivi di apprendimento fondamentali basandoti sulla trascrizione sotto fornita]`
+}
 
 REGOLE OBBLIGATORIE PER IL QUIZ:
-- Ogni domanda DEVE testare la COMPRENSIONE concettuale: definizioni, relazioni causali, meccanismi, differenze tra concetti, applicazioni pratiche.
-- VIETATO creare domande sull'ordine o la sequenza di presentazione nella lezione. Sono ESPLICITAMENTE VIETATE domande come: "Qual è il primo/ultimo elemento menzionato?", "In che ordine appaiono X, Y, Z nel testo?", "Quale NON è stato menzionato per primo/ultimo?".
-- I distrattori (opzioni errate) devono essere PLAUSIBILI ma chiaramente distinguibili per chi ha compreso il concetto. Evita distrattori che richiedono di ricordare dettagli arbitrari o l'ordine di presentazione.
-- Buoni distrattori: concetti simili ma con differenze sostanziali, definizioni parzialmente corrette, applicazioni errate di un principio.
-- Cattivi distrattori: opzioni palesemente assurde, dettagli sull'ordine di presentazione, informazioni non correlate.
-- Varia il livello di difficoltà: includi domande di comprensione base (definizioni), domande di analisi (confronti, relazioni causali) e domande di applicazione (casi pratici).
+- Genera un set di 8-10 domande a risposta multipla (4 opzioni ciascuna, 1 sola corretta).
+- Le domande devono coprire gli Obiettivi di Apprendimento sopra indicati.
+- Organizza le domande con una progressione di difficoltà:
+  1. Comprensione Base (es. definizioni, concetti chiave)
+  2. Analisi (es. confronti tra concetti, relazioni di causa-effetto)
+  3. Applicazione (es. scenari pratici o problemi reali menzionati nel testo)
+- I distrattori (opzioni errate) devono essere plausibili ma chiaramente errati sulla base del testo fornito.
+- VIETATO creare domande sull'ordine o la sequenza di presentazione nella lezione.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
@@ -537,12 +627,28 @@ Trascrizione:
             generationConfig: {
               responseMimeType: 'application/json',
               responseSchema: quizSchema as any,
+              temperature: 0.3,
             },
           }),
           { jobLabel: 'Job 4 Quiz', supabase, lectureId, jobType: 'quiz' }
         )
 
         const quizJson = JSON.parse(quizResult.response.text())
+
+        // Best effort post-generation validation of keywords
+        if (Array.isArray(quizJson.quiz)) {
+          quizJson.quiz.forEach((q: any, index: number) => {
+            const qValid = validateKeywords(q.question, transcriptText)
+            const optionsText = Array.isArray(q.options) ? q.options.join(' ') : ''
+            const optValid = validateKeywords(optionsText, transcriptText)
+            if (!qValid && !optValid) {
+              console.warn(
+                `[Validation Warning] Quiz Question #${index + 1} seems disconnected from the transcript. ` +
+                `Question: "${q.question}"`
+              )
+            }
+          })
+        }
         // Get the latest version number
         const { data: existingQuizSets } = await supabase
           .from('quiz_sets')
