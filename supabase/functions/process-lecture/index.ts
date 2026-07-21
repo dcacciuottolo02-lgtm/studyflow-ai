@@ -252,6 +252,8 @@ async function runPipeline(
     const shouldRunFlashcards = flashcardsJob && flashcardsJob.status === 'queued'
     const shouldRunQuiz = quizJob && quizJob.status === 'queued'
 
+    const targetLangLabel = contentLanguage === 'it' ? 'Italian (italiano)' : 'English (inglese)'
+
     // 1. SUMMARY
     if (shouldRunSummary) {
       try {
@@ -261,8 +263,6 @@ async function runPipeline(
           .update({ status: 'running', started_at: new Date().toISOString() })
           .eq('lecture_id', lectureId)
           .eq('job_type', 'summary')
-
-        const targetLangLabel = contentLanguage === 'it' ? 'Italian (italiano)' : 'English (inglese)'
 
         const summarySchema = {
           type: 'object',
