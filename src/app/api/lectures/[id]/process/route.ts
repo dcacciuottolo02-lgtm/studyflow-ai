@@ -85,210 +85,209 @@ async function runNodePipeline(
       .update({
         status: 'failed',
         completed_at: new Date().toISOString(),
-        error_message: 'GEMINI_API_KEY non configurata sul server.',
+        error_message: 'Chiave GEMINI_API_KEY non configurata nelle variabili d’ambiente del server.',
       })
       .eq('lecture_id', lectureId)
       .eq('status', 'queued')
-    return
+    throw new Error('GEMINI_API_KEY non configurata nelle variabili d’ambiente del server (Vercel / .env.local).')
   }
 
-  try {
-    const { data: jobs, error: jobsErr } = await supabase
-      .from('ai_jobs')
-      .select('job_type, status')
-      .eq('lecture_id', lectureId)
+  const { data: jobs, error: jobsErr } = await supabase
+    .from('ai_jobs')
+    .select('job_type, status')
+    .eq('lecture_id', lectureId)
 
-    if (jobsErr || !jobs) {
-      throw new Error(`Impossibile recuperare i job: ${jobsErr?.message}`)
+  if (jobsErr || !jobs) {
+    throw new Error(`Impossibile recuperare i job: ${jobsErr?.message}`)
+  }
+
+  const transcriptJob = jobs.find((j: any) => j.job_type === 'transcription')
+  const summaryJob = jobs.find((j: any) => j.job_type === 'summary')
+  const flashcardsJob = jobs.find((j: any) => j.job_type === 'flashcards')
+  const quizJob = jobs.find((j: any) => j.job_type === 'quiz')
+
+  const genAI = new GoogleGenerativeAI(geminiApiKey)
+  const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' })
+
+  let transcriptText = ''
+
+  // =========================================================================
+  // JOB 1: TRANSCRIPTION
+  // =========================================================================
+  if (!transcriptJob || ['queued', 'failed', 'created'].includes(transcriptJob.status)) {
+    const { data: resource, error: resErr } = await supabase
+      .from('resources')
+      .select('file_url, file_size_bytes')
+      .eq('lecture_id', lectureId)
+      .eq('type', 'audio')
+      .maybeSingle()
+
+    if (resErr || !resource) {
+      throw new Error(`Risorsa audio non trovata: ${resErr?.message || 'Empty data'}`)
     }
 
-    const transcriptJob = jobs.find((j: any) => j.job_type === 'transcription')
-    const summaryJob = jobs.find((j: any) => j.job_type === 'summary')
-    const flashcardsJob = jobs.find((j: any) => j.job_type === 'flashcards')
-    const quizJob = jobs.find((j: any) => j.job_type === 'quiz')
+    const bucketName = 'lecture-resources'
+    const pathInsideBucket = resource.file_url.startsWith(`${bucketName}/`)
+      ? resource.file_url.substring(bucketName.length + 1)
+      : resource.file_url
 
-    const genAI = new GoogleGenerativeAI(geminiApiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-lite' })
+    console.log(`[AI Node Pipeline] Download audio da storage: ${pathInsideBucket}`)
+    const { data: fileData, error: downloadError } = await supabase.storage
+      .from(bucketName)
+      .download(pathInsideBucket)
 
-    let transcriptText = ''
+    if (downloadError || !fileData) {
+      throw new Error(`Impossibile scaricare il file audio dallo storage: ${downloadError?.message}`)
+    }
 
-    // =========================================================================
-    // JOB 1: TRANSCRIPTION
-    // =========================================================================
-    if (transcriptJob && ['queued', 'failed', 'created'].includes(transcriptJob.status)) {
-      const { data: resource, error: resErr } = await supabase
-        .from('resources')
-        .select('file_url, file_size_bytes')
+    const arrayBuffer = await fileData.arrayBuffer()
+    const base64Audio = Buffer.from(arrayBuffer).toString('base64')
+
+    const fileExtension = pathInsideBucket.split('.').pop()?.toLowerCase() || 'webm'
+    const mimeTypeMap: Record<string, string> = {
+      webm: 'audio/webm',
+      mp3: 'audio/mp3',
+      mpeg: 'audio/mpeg',
+      wav: 'audio/wav',
+      m4a: 'audio/m4a',
+      mp4: 'audio/mp4',
+    }
+    const audioMimeType = mimeTypeMap[fileExtension] || 'audio/webm'
+
+    console.log(`[AI Node Pipeline - Job 1] Avvio trascrizione con Gemini...`)
+    await supabase
+      .from('ai_jobs')
+      .update({ status: 'running', started_at: new Date().toISOString() })
+      .eq('lecture_id', lectureId)
+      .eq('job_type', 'transcription')
+
+    await supabase.from('lectures').update({ status: 'processing' }).eq('id', lectureId)
+
+    try {
+      const transcriptionPrompt =
+        'Fornisci una trascrizione accurata, fedele e pulita del seguente file audio. Rimuovi solo i riempitivi verbali eccessivi (es. "ehm", "uhm", ripetizioni balbettate) ma mantieni intatto tutto il resto del contenuto, dei concetti e della terminologia spiegata.'
+
+      const response = await callGeminiWithRetry(
+        () =>
+          model.generateContent([
+            { text: transcriptionPrompt },
+            { inlineData: { data: base64Audio, mimeType: audioMimeType } },
+          ]),
+        { jobLabel: 'Job 1 Transcription', supabase, lectureId, jobType: 'transcription' }
+      )
+
+      transcriptText = response.response.text()
+      if (!transcriptText || transcriptText.trim().length === 0) {
+        throw new Error('Gemini ha restituito una trascrizione vuota.')
+      }
+
+      await supabase
+        .from('lectures')
+        .update({ transcript_text: transcriptText })
+        .eq('id', lectureId)
+
+      await supabase
+        .from('ai_jobs')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
         .eq('lecture_id', lectureId)
-        .eq('type', 'audio')
-        .maybeSingle()
+        .eq('job_type', 'transcription')
+    } catch (err: any) {
+      console.error(`[AI Node Pipeline - Job 1] Errore trascrizione:`, err)
+      await supabase
+        .from('ai_jobs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: err.message || 'Trascrizione fallita',
+        })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'transcription')
 
-      if (resErr || !resource) {
-        throw new Error(`Risorsa audio non trovata: ${resErr?.message || 'Empty data'}`)
-      }
+      await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
+      throw err
+    }
+  } else {
+    console.log(`[AI Node Pipeline] Trascrizione già completata, recupero testo...`)
+    const { data: lectureData, error: lecErr } = await supabase
+      .from('lectures')
+      .select('transcript_text')
+      .eq('id', lectureId)
+      .single()
 
-      const bucketName = 'lecture-resources'
-      const pathInsideBucket = resource.file_url.startsWith(`${bucketName}/`)
-        ? resource.file_url.substring(bucketName.length + 1)
-        : resource.file_url
+    if (lecErr || !lectureData || !lectureData.transcript_text) {
+      throw new Error(`Testo trascrizione non trovato: ${lecErr?.message || 'Empty transcript'}`)
+    }
+    transcriptText = lectureData.transcript_text
+    await supabase.from('lectures').update({ status: 'processing' }).eq('id', lectureId)
+  }
 
-      console.log(`[AI Node Pipeline] Download audio da storage: ${pathInsideBucket}`)
-      const { data: fileData, error: downloadError } = await supabase.storage
-        .from(bucketName)
-        .download(pathInsideBucket)
+  // =========================================================================
+  // STUDY MATERIAL CONTAINER
+  // =========================================================================
+  let studyMaterialId = ''
+  const { data: existingSM } = await supabase
+    .from('study_materials')
+    .select('id')
+    .eq('lecture_id', lectureId)
+    .maybeSingle()
 
-      if (downloadError || !fileData) {
-        throw new Error(`Impossibile scaricare il file audio: ${downloadError?.message}`)
-      }
+  if (existingSM) {
+    studyMaterialId = existingSM.id
+    await supabase
+      .from('study_materials')
+      .update({ status: 'pending' })
+      .eq('id', studyMaterialId)
+  } else {
+    const { data: newSM, error: smErr } = await supabase
+      .from('study_materials')
+      .insert({ lecture_id: lectureId, status: 'pending' })
+      .select('id')
+      .single()
 
-      const arrayBuffer = await fileData.arrayBuffer()
-      const base64Audio = Buffer.from(arrayBuffer).toString('base64')
+    if (smErr || !newSM) {
+      throw new Error(`Impossibile creare il record study_materials: ${smErr?.message}`)
+    }
+    studyMaterialId = newSM.id
+  }
 
-      const fileExtension = pathInsideBucket.split('.').pop()?.toLowerCase() || 'webm'
-      const mimeTypeMap: Record<string, string> = {
-        webm: 'audio/webm',
-        mp3: 'audio/mp3',
-        mpeg: 'audio/mpeg',
-        wav: 'audio/wav',
-        m4a: 'audio/m4a',
-        mp4: 'audio/mp4',
-      }
-      const audioMimeType = mimeTypeMap[fileExtension] || 'audio/webm'
+  // =========================================================================
+  // JOBS 2, 3, 4: SUMMARY, FLASHCARDS, QUIZ
+  // =========================================================================
+  const shouldRunSummary = generateSummary && (!summaryJob || ['queued', 'failed', 'created'].includes(summaryJob.status))
+  const shouldRunFlashcards = generateFlashcards && (!flashcardsJob || ['queued', 'failed', 'created'].includes(flashcardsJob.status))
+  const shouldRunQuiz = generateQuiz && (!quizJob || ['queued', 'failed', 'created'].includes(quizJob.status))
 
-      console.log(`[AI Node Pipeline - Job 1] Avvio trascrizione...`)
+  const targetLangLabel = contentLanguage === 'it' ? 'Italian (italiano)' : 'English (inglese)'
+
+  // 1. SUMMARY
+  if (shouldRunSummary) {
+    try {
+      console.log(`[AI Node Pipeline - Job 2] Generazione Riassunto...`)
       await supabase
         .from('ai_jobs')
         .update({ status: 'running', started_at: new Date().toISOString() })
         .eq('lecture_id', lectureId)
-        .eq('job_type', 'transcription')
+        .eq('job_type', 'summary')
 
-      await supabase.from('lectures').update({ status: 'processing' }).eq('id', lectureId)
-
-      try {
-        const transcriptionPrompt =
-          'Fornisci una trascrizione accurata, fedele e pulita del seguente file audio. Rimuovi solo i riempitivi verbali eccessivi (es. "ehm", "uhm", ripetizioni balbettate) ma mantieni intatto tutto il resto del contenuto, dei concetti e della terminologia spiegata.'
-
-        const response = await callGeminiWithRetry(
-          () =>
-            model.generateContent([
-              { text: transcriptionPrompt },
-              { inlineData: { data: base64Audio, mimeType: audioMimeType } },
-            ]),
-          { jobLabel: 'Job 1 Transcription', supabase, lectureId, jobType: 'transcription' }
-        )
-
-        transcriptText = response.response.text()
-        if (!transcriptText || transcriptText.trim().length === 0) {
-          throw new Error('Gemini ha restituito una trascrizione vuota.')
-        }
-
-        await supabase
-          .from('lectures')
-          .update({ transcript_text: transcriptText })
-          .eq('id', lectureId)
-
-        await supabase
-          .from('ai_jobs')
-          .update({ status: 'completed', completed_at: new Date().toISOString() })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'transcription')
-      } catch (err: any) {
-        console.error(`[AI Node Pipeline - Job 1] Errore:`, err)
-        await supabase
-          .from('ai_jobs')
-          .update({
-            status: 'failed',
-            completed_at: new Date().toISOString(),
-            error_message: err.message || 'Trascrizione fallita',
-          })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'transcription')
-
-        await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
-        return
-      }
-    } else {
-      console.log(`[AI Node Pipeline] Trascrizione già completata, recupero testo...`)
-      const { data: lectureData, error: lecErr } = await supabase
-        .from('lectures')
-        .select('transcript_text')
-        .eq('id', lectureId)
-        .single()
-
-      if (lecErr || !lectureData || !lectureData.transcript_text) {
-        throw new Error(`Testo trascrizione non trovato: ${lecErr?.message || 'Empty transcript'}`)
-      }
-      transcriptText = lectureData.transcript_text
-      await supabase.from('lectures').update({ status: 'processing' }).eq('id', lectureId)
-    }
-
-    // =========================================================================
-    // STUDY MATERIAL CONTAINER
-    // =========================================================================
-    let studyMaterialId = ''
-    const { data: existingSM } = await supabase
-      .from('study_materials')
-      .select('id')
-      .eq('lecture_id', lectureId)
-      .maybeSingle()
-
-    if (existingSM) {
-      studyMaterialId = existingSM.id
-      await supabase
-        .from('study_materials')
-        .update({ status: 'pending' })
-        .eq('id', studyMaterialId)
-    } else {
-      const { data: newSM, error: smErr } = await supabase
-        .from('study_materials')
-        .insert({ lecture_id: lectureId, status: 'pending' })
-        .select('id')
-        .single()
-
-      if (smErr || !newSM) {
-        throw new Error(`Impossibile creare il record study_materials: ${smErr?.message}`)
-      }
-      studyMaterialId = newSM.id
-    }
-
-    // =========================================================================
-    // JOBS 2, 3, 4: SUMMARY, FLASHCARDS, QUIZ
-    // =========================================================================
-    const shouldRunSummary = generateSummary && summaryJob && ['queued', 'failed', 'created'].includes(summaryJob.status)
-    const shouldRunFlashcards = generateFlashcards && flashcardsJob && ['queued', 'failed', 'created'].includes(flashcardsJob.status)
-    const shouldRunQuiz = generateQuiz && quizJob && ['queued', 'failed', 'created'].includes(quizJob.status)
-
-    const targetLangLabel = contentLanguage === 'it' ? 'Italian (italiano)' : 'English (inglese)'
-
-    // 1. SUMMARY
-    if (shouldRunSummary) {
-      try {
-        console.log(`[AI Node Pipeline - Job 2] Generazione Riassunto...`)
-        await supabase
-          .from('ai_jobs')
-          .update({ status: 'running', started_at: new Date().toISOString() })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'summary')
-
-        const summarySchema = {
-          type: 'object',
-          properties: {
-            content: {
+      const summarySchema = {
+        type: 'object',
+        properties: {
+          content: {
+            type: 'string',
+            description: `Detailed study summary formatted in Markdown, written entirely in ${targetLangLabel}.`,
+          },
+          key_concepts: {
+            type: 'array',
+            items: {
               type: 'string',
-              description: `Detailed study summary formatted in Markdown, written entirely in ${targetLangLabel}.`,
-            },
-            key_concepts: {
-              type: 'array',
-              items: {
-                type: 'string',
-                description: `A key concept or term from the lecture, written entirely in ${targetLangLabel}.`,
-              },
+              description: `A key concept or term from the lecture, written entirely in ${targetLangLabel}.`,
             },
           },
-          required: ['content', 'key_concepts'],
-        }
+        },
+        required: ['content', 'key_concepts'],
+      }
 
-        const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite.
+      const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite.
 IMPORTANTE: Genera il riassunto dell'intera lezione ed i relativi concetti chiave esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
 
 Basandoti sulla trascrizione fornita, genera un riassunto della lezione estremamente dettagliato, accademico, ben organizzato e visivamente ordinato in formato Markdown.
@@ -314,96 +313,96 @@ Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo
 Trascrizione:
 "${transcriptText}"`
 
-        const sumResult = await callGeminiWithRetry(
-          () =>
-            model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
-              generationConfig: {
-                responseMimeType: 'application/json',
-                responseSchema: summarySchema as any,
-              },
-            }),
-          { jobLabel: 'Job 2 Summary', supabase, lectureId, jobType: 'summary' }
-        )
+      const sumResult = await callGeminiWithRetry(
+        () =>
+          model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: summaryPrompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: summarySchema as any,
+            },
+          }),
+        { jobLabel: 'Job 2 Summary', supabase, lectureId, jobType: 'summary' }
+      )
 
-        const summaryJson = JSON.parse(sumResult.response.text())
-        const { data: existingSum } = await supabase
+      const summaryJson = JSON.parse(sumResult.response.text())
+      const { data: existingSum } = await supabase
+        .from('summaries')
+        .select('id')
+        .eq('study_material_id', studyMaterialId)
+        .maybeSingle()
+
+      if (existingSum) {
+        await supabase
           .from('summaries')
-          .select('id')
-          .eq('study_material_id', studyMaterialId)
-          .maybeSingle()
-
-        if (existingSum) {
-          await supabase
-            .from('summaries')
-            .update({
-              content: summaryJson.content,
-              key_concepts: summaryJson.key_concepts,
-              version: 1,
-            })
-            .eq('id', existingSum.id)
-        } else {
-          await supabase.from('summaries').insert({
-            study_material_id: studyMaterialId,
+          .update({
             content: summaryJson.content,
             key_concepts: summaryJson.key_concepts,
+            version: 1,
           })
-        }
-
-        await supabase
-          .from('ai_jobs')
-          .update({ status: 'completed', completed_at: new Date().toISOString() })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'summary')
-      } catch (err: any) {
-        console.error(`[AI Node Pipeline - Job 2] Errore:`, err)
-        await supabase
-          .from('ai_jobs')
-          .update({
-            status: 'failed',
-            completed_at: new Date().toISOString(),
-            error_message: err.message || 'Generazione riassunto fallita',
-          })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'summary')
+          .eq('id', existingSum.id)
+      } else {
+        await supabase.from('summaries').insert({
+          study_material_id: studyMaterialId,
+          content: summaryJson.content,
+          key_concepts: summaryJson.key_concepts,
+        })
       }
+
+      await supabase
+        .from('ai_jobs')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'summary')
+    } catch (err: any) {
+      console.error(`[AI Node Pipeline - Job 2] Errore:`, err)
+      await supabase
+        .from('ai_jobs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: err.message || 'Generazione riassunto fallita',
+        })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'summary')
     }
+  }
 
-    // 2. FLASHCARDS
-    if (shouldRunFlashcards) {
-      try {
-        console.log(`[AI Node Pipeline - Job 3] Generazione Flashcards...`)
-        await supabase
-          .from('ai_jobs')
-          .update({ status: 'running', started_at: new Date().toISOString() })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'flashcards')
+  // 2. FLASHCARDS
+  if (shouldRunFlashcards) {
+    try {
+      console.log(`[AI Node Pipeline - Job 3] Generazione Flashcards...`)
+      await supabase
+        .from('ai_jobs')
+        .update({ status: 'running', started_at: new Date().toISOString() })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'flashcards')
 
-        const flashcardsSchema = {
-          type: 'object',
-          properties: {
-            flashcards: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  question: {
-                    type: 'string',
-                    description: `The study question written entirely in ${targetLangLabel}.`,
-                  },
-                  answer: {
-                    type: 'string',
-                    description: `The clear and concise answer written entirely in ${targetLangLabel}.`,
-                  },
+      const flashcardsSchema = {
+        type: 'object',
+        properties: {
+          flashcards: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                question: {
+                  type: 'string',
+                  description: `The study question written entirely in ${targetLangLabel}.`,
                 },
-                required: ['question', 'answer'],
+                answer: {
+                  type: 'string',
+                  description: `The clear and concise answer written entirely in ${targetLangLabel}.`,
+                },
               },
+              required: ['question', 'answer'],
             },
           },
-          required: ['flashcards'],
-        }
+        },
+        required: ['flashcards'],
+      }
 
-        const flashcardsPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
+      const flashcardsPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
 IMPORTANTE: Genera tutte le domande e le risposte delle flashcard esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
 
 Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta di alta qualità pedagogica.
@@ -419,108 +418,108 @@ Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo
 Trascrizione:
 "${transcriptText}"`
 
-        const fcResult = await callGeminiWithRetry(
-          () =>
-            model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: flashcardsPrompt }] }],
-              generationConfig: {
-                responseMimeType: 'application/json',
-                responseSchema: flashcardsSchema as any,
-              },
-            }),
-          { jobLabel: 'Job 3 Flashcards', supabase, lectureId, jobType: 'flashcards' }
-        )
+      const fcResult = await callGeminiWithRetry(
+        () =>
+          model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: flashcardsPrompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: flashcardsSchema as any,
+            },
+          }),
+        { jobLabel: 'Job 3 Flashcards', supabase, lectureId, jobType: 'flashcards' }
+      )
 
-        const fcJson = JSON.parse(fcResult.response.text())
+      const fcJson = JSON.parse(fcResult.response.text())
 
-        const { data: existingSets } = await supabase
-          .from('flashcard_sets')
-          .select('version')
-          .eq('study_material_id', studyMaterialId)
-          .order('version', { ascending: false })
-          .limit(1)
+      const { data: existingSets } = await supabase
+        .from('flashcard_sets')
+        .select('version')
+        .eq('study_material_id', studyMaterialId)
+        .order('version', { ascending: false })
+        .limit(1)
 
-        const nextVersion = existingSets && existingSets.length > 0 ? existingSets[0].version + 1 : 1
+      const nextVersion = existingSets && existingSets.length > 0 ? existingSets[0].version + 1 : 1
 
-        const { data: fcSet, error: fcSetErr } = await supabase
-          .from('flashcard_sets')
-          .insert({
-            study_material_id: studyMaterialId,
-            version: nextVersion,
-          })
-          .select('id')
-          .single()
+      const { data: fcSet, error: fcSetErr } = await supabase
+        .from('flashcard_sets')
+        .insert({
+          study_material_id: studyMaterialId,
+          version: nextVersion,
+        })
+        .select('id')
+        .single()
 
-        if (fcSetErr || !fcSet) throw new Error(`Impossibile creare il set di flashcard: ${fcSetErr?.message}`)
+      if (fcSetErr || !fcSet) throw new Error(`Impossibile creare il set di flashcard: ${fcSetErr?.message}`)
 
-        const flashcardsToInsert = fcJson.flashcards.map((fc: any, index: number) => ({
-          flashcard_set_id: fcSet.id,
-          question: fc.question,
-          answer: fc.answer,
-          status: 'unseen',
-          order_index: index,
-        }))
+      const flashcardsToInsert = fcJson.flashcards.map((fc: any, index: number) => ({
+        flashcard_set_id: fcSet.id,
+        question: fc.question,
+        answer: fc.answer,
+        status: 'unseen',
+        order_index: index,
+      }))
 
-        await supabase.from('flashcards').insert(flashcardsToInsert)
+      await supabase.from('flashcards').insert(flashcardsToInsert)
 
-        await supabase
-          .from('ai_jobs')
-          .update({ status: 'completed', completed_at: new Date().toISOString() })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'flashcards')
-      } catch (err: any) {
-        console.error(`[AI Node Pipeline - Job 3] Errore:`, err)
-        await supabase
-          .from('ai_jobs')
-          .update({
-            status: 'failed',
-            completed_at: new Date().toISOString(),
-            error_message: err.message || 'Generazione flashcard fallita',
-          })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'flashcards')
-      }
+      await supabase
+        .from('ai_jobs')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'flashcards')
+    } catch (err: any) {
+      console.error(`[AI Node Pipeline - Job 3] Errore:`, err)
+      await supabase
+        .from('ai_jobs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: err.message || 'Generazione flashcard fallita',
+        })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'flashcards')
     }
+  }
 
-    // 3. QUIZ
-    if (shouldRunQuiz) {
-      try {
-        console.log(`[AI Node Pipeline - Job 4] Generazione Quiz...`)
-        await supabase
-          .from('ai_jobs')
-          .update({ status: 'running', started_at: new Date().toISOString() })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'quiz')
+  // 3. QUIZ
+  if (shouldRunQuiz) {
+    try {
+      console.log(`[AI Node Pipeline - Job 4] Generazione Quiz...`)
+      await supabase
+        .from('ai_jobs')
+        .update({ status: 'running', started_at: new Date().toISOString() })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'quiz')
 
-        const quizSchema = {
-          type: 'object',
-          properties: {
-            quiz: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  question: {
-                    type: 'string',
-                    description: `The quiz question written entirely in ${targetLangLabel}.`,
-                  },
-                  options: {
-                    type: 'array',
-                    items: {
-                      type: 'string',
-                      description: `Answer option written entirely in ${targetLangLabel}.`,
-                    },
-                  },
-                  correct_option_index: { type: 'integer' },
+      const quizSchema = {
+        type: 'object',
+        properties: {
+          quiz: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                question: {
+                  type: 'string',
+                  description: `The quiz question written entirely in ${targetLangLabel}.`,
                 },
-                required: ['question', 'options', 'correct_option_index'],
+                options: {
+                  type: 'array',
+                  items: {
+                    type: 'string',
+                    description: `Answer option written entirely in ${targetLangLabel}.`,
+                  },
+                },
+                correct_option_index: { type: 'integer' },
               },
+              required: ['question', 'options', 'correct_option_index'],
             },
           },
-          required: ['quiz'],
-        }
+        },
+        required: ['quiz'],
+      }
 
-        const quizPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
+      const quizPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
 IMPORTANTE: Genera tutte le domande e le opzioni di risposta del quiz esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
 
 Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla di alta qualità pedagogica per l'autovalutazione dello studente. Ogni domanda deve avere esattamente 4 opzioni di risposta ed un indicatore dell'indice dell'opzione corretta (da 0 a 3).
@@ -535,123 +534,119 @@ Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo
 Trascrizione:
 "${transcriptText}"`
 
-        const quizResult = await callGeminiWithRetry(
-          () =>
-            model.generateContent({
-              contents: [{ role: 'user', parts: [{ text: quizPrompt }] }],
-              generationConfig: {
-                responseMimeType: 'application/json',
-                responseSchema: quizSchema as any,
-              },
-            }),
-          { jobLabel: 'Job 4 Quiz', supabase, lectureId, jobType: 'quiz' }
-        )
+      const quizResult = await callGeminiWithRetry(
+        () =>
+          model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: quizPrompt }] }],
+            generationConfig: {
+              responseMimeType: 'application/json',
+              responseSchema: quizSchema as any,
+            },
+          }),
+        { jobLabel: 'Job 4 Quiz', supabase, lectureId, jobType: 'quiz' }
+      )
 
-        const quizJson = JSON.parse(quizResult.response.text())
+      const quizJson = JSON.parse(quizResult.response.text())
 
-        const { data: existingQuizSets } = await supabase
-          .from('quiz_sets')
-          .select('version')
-          .eq('study_material_id', studyMaterialId)
-          .order('version', { ascending: false })
-          .limit(1)
+      const { data: existingQuizSets } = await supabase
+        .from('quiz_sets')
+        .select('version')
+        .eq('study_material_id', studyMaterialId)
+        .order('version', { ascending: false })
+        .limit(1)
 
-        const nextQuizVersion = existingQuizSets && existingQuizSets.length > 0 ? existingQuizSets[0].version + 1 : 1
+      const nextQuizVersion = existingQuizSets && existingQuizSets.length > 0 ? existingQuizSets[0].version + 1 : 1
 
-        const { data: qSet, error: qSetErr } = await supabase
-          .from('quiz_sets')
-          .insert({
-            study_material_id: studyMaterialId,
-            version: nextQuizVersion,
-          })
-          .select('id')
-          .single()
+      const { data: qSet, error: qSetErr } = await supabase
+        .from('quiz_sets')
+        .insert({
+          study_material_id: studyMaterialId,
+          version: nextQuizVersion,
+        })
+        .select('id')
+        .single()
 
-        if (qSetErr || !qSet) throw new Error(`Impossibile creare il set di quiz: ${qSetErr?.message}`)
+      if (qSetErr || !qSet) throw new Error(`Impossibile creare il set di quiz: ${qSetErr?.message}`)
 
-        const quizQuestionsToInsert = quizJson.quiz.map((q: any, index: number) => ({
-          quiz_set_id: qSet.id,
-          question: q.question,
-          options: q.options,
-          correct_option_index: q.correct_option_index,
-          order_index: index,
-        }))
+      const quizQuestionsToInsert = quizJson.quiz.map((q: any, index: number) => ({
+        quiz_set_id: qSet.id,
+        question: q.question,
+        options: q.options,
+        correct_option_index: q.correct_option_index,
+        order_index: index,
+      }))
 
-        await supabase.from('quiz_questions').insert(quizQuestionsToInsert)
+      await supabase.from('quiz_questions').insert(quizQuestionsToInsert)
 
-        await supabase
-          .from('ai_jobs')
-          .update({ status: 'completed', completed_at: new Date().toISOString() })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'quiz')
-      } catch (err: any) {
-        console.error(`[AI Node Pipeline - Job 4] Errore:`, err)
-        await supabase
-          .from('ai_jobs')
-          .update({
-            status: 'failed',
-            completed_at: new Date().toISOString(),
-            error_message: err.message || 'Generazione quiz fallita',
-          })
-          .eq('lecture_id', lectureId)
-          .eq('job_type', 'quiz')
-      }
+      await supabase
+        .from('ai_jobs')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'quiz')
+    } catch (err: any) {
+      console.error(`[AI Node Pipeline - Job 4] Errore:`, err)
+      await supabase
+        .from('ai_jobs')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+          error_message: err.message || 'Generazione quiz fallita',
+        })
+        .eq('lecture_id', lectureId)
+        .eq('job_type', 'quiz')
     }
+  }
 
-    // =========================================================================
-    // UPDATE FINAL STATUS
-    // =========================================================================
-    const { data: finalJobs, error: finalJobsErr } = await supabase
-      .from('ai_jobs')
-      .select('job_type, status')
-      .eq('lecture_id', lectureId)
+  // =========================================================================
+  // UPDATE FINAL STATUS
+  // =========================================================================
+  const { data: finalJobs, error: finalJobsErr } = await supabase
+    .from('ai_jobs')
+    .select('job_type, status')
+    .eq('lecture_id', lectureId)
 
-    if (finalJobsErr || !finalJobs) {
-      throw new Error(`Impossibile recuperare i job finali: ${finalJobsErr?.message}`)
-    }
+  if (finalJobsErr || !finalJobs) {
+    throw new Error(`Impossibile recuperare i job finali: ${finalJobsErr?.message}`)
+  }
 
-    const activeNonTransJobs = finalJobs.filter(
-      (j: any) => j.job_type !== 'transcription' && j.job_type !== 'embeddings'
-    )
+  const activeNonTransJobs = finalJobs.filter(
+    (j: any) => j.job_type !== 'transcription' && j.job_type !== 'embeddings'
+  )
 
-    const totalJobs = activeNonTransJobs.length
-    const completedJobs = activeNonTransJobs.filter((j: any) => j.status === 'completed').length
+  const totalJobs = activeNonTransJobs.length
+  const completedJobs = activeNonTransJobs.filter((j: any) => j.status === 'completed').length
 
-    let finalSMStatus = 'pending'
-    let finalLectureStatus = 'completed'
+  let finalSMStatus = 'pending'
+  let finalLectureStatus = 'completed'
 
-    const finalTransJob = finalJobs.find((j: any) => j.job_type === 'transcription')
-    if (finalTransJob && finalTransJob.status === 'failed') {
+  const finalTransJob = finalJobs.find((j: any) => j.job_type === 'transcription')
+  if (finalTransJob && finalTransJob.status === 'failed') {
+    finalSMStatus = 'failed'
+    finalLectureStatus = 'failed'
+  } else {
+    if (totalJobs === 0 || completedJobs === totalJobs) {
+      finalSMStatus = 'ready'
+      finalLectureStatus = 'completed'
+    } else if (completedJobs > 0) {
+      finalSMStatus = 'partial'
+      finalLectureStatus = 'completed'
+    } else {
       finalSMStatus = 'failed'
       finalLectureStatus = 'failed'
-    } else {
-      if (totalJobs === 0 || completedJobs === totalJobs) {
-        finalSMStatus = 'ready'
-        finalLectureStatus = 'completed'
-      } else if (completedJobs > 0) {
-        finalSMStatus = 'partial'
-        finalLectureStatus = 'completed'
-      } else {
-        finalSMStatus = 'failed'
-        finalLectureStatus = 'failed'
-      }
     }
-
-    await supabase
-      .from('study_materials')
-      .update({ status: finalSMStatus })
-      .eq('id', studyMaterialId)
-
-    await supabase
-      .from('lectures')
-      .update({ status: finalLectureStatus })
-      .eq('id', lectureId)
-
-    console.log(`[AI Node Pipeline] Completato con successo per la lezione ${lectureId}. finalSMStatus: ${finalSMStatus}, finalLectureStatus: ${finalLectureStatus}`)
-  } catch (err: any) {
-    console.error(`[AI Node Pipeline] Errore fatale nella pipeline:`, err)
-    await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
   }
+
+  await supabase
+    .from('study_materials')
+    .update({ status: finalSMStatus })
+    .eq('id', studyMaterialId)
+
+  await supabase
+    .from('lectures')
+    .update({ status: finalLectureStatus })
+    .eq('id', lectureId)
+
+  console.log(`[AI Node Pipeline] Completato con successo per la lezione ${lectureId}. finalSMStatus: ${finalSMStatus}, finalLectureStatus: ${finalLectureStatus}`)
 }
 
 export async function POST(
@@ -769,7 +764,7 @@ export async function POST(
 
     const { error: lectureUpdErr } = await supabase
       .from('lectures')
-      .update({ status: 'queued', content_language: contentLanguage })
+      .update({ status: 'processing', content_language: contentLanguage })
       .eq('id', lectureId)
 
     if (lectureUpdErr) {
@@ -779,7 +774,7 @@ export async function POST(
       )
     }
 
-    // Try invoking Edge Function with authorization header
+    // Try invoking Edge Function with authorization header first
     let edgeFunctionSuccess = false
     try {
       const { data: invokeData, error: invokeErr } = await supabase.functions.invoke('process-lecture', {
@@ -795,32 +790,27 @@ export async function POST(
         },
       })
 
-      if (!invokeErr && invokeData) {
+      if (!invokeErr && invokeData && invokeData.success) {
         edgeFunctionSuccess = true
         console.log('[Route POST] Invocation Edge Function riuscita con successo:', invokeData)
-      } else {
-        console.warn('[Route POST] Edge Function non disponibile o fallita, eseguo fallback locale Node:', invokeErr)
       }
     } catch (edgeErr) {
-      console.warn('[Route POST] Eccezione durante invocation Edge Function, attivo fallback Node:', edgeErr)
+      console.warn('[Route POST] Eccezione durante invocation Edge Function, attivo pipeline sincrona Node:', edgeErr)
     }
 
-    // Fallback: run local Node pipeline if Edge Function failed or was unavailable
+    // Direct synchronous execution to ensure Vercel / Next.js Serverless finishes the AI pipeline before ending response
     if (!edgeFunctionSuccess) {
-      // Execute in background
-      runNodePipeline(lectureId, supabase, {
+      await runNodePipeline(lectureId, supabase, {
         generateSummary: !!generateSummary,
         generateFlashcards: !!generateFlashcards,
         generateQuiz: !!generateQuiz,
         contentLanguage,
-      }).catch((err) => {
-        console.error('[Route POST] Fallback Node pipeline error:', err)
       })
     }
 
     return NextResponse.json(
-      { success: true, status: 'queued', message: 'Elaborazione avviata in background.' },
-      { status: 202 }
+      { success: true, status: 'completed', message: 'Elaborazione completata con successo.' },
+      { status: 200 }
     )
   } catch (err: any) {
     console.error('[Route POST] Errore fatale:', err)
