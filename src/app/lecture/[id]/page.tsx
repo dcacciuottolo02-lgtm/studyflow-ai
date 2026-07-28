@@ -402,6 +402,30 @@ export default function StudyHubPage() {
     }
   }, [lecture, jobs])
 
+  // Auto-trigger pipeline on mount if lecture is stuck in queued or uploaded
+  const hasAutoTriggeredRef = useRef(false)
+  useEffect(() => {
+    if (!lecture) return
+    if (['uploaded', 'queued'].includes(lecture.status) && !hasAutoTriggeredRef.current) {
+      const isAnyJobRunning = jobs.some((j) => j.status === 'running')
+      if (!isAnyJobRunning) {
+        hasAutoTriggeredRef.current = true
+        console.log('[StudyHub] Auto-triggering processing for queued lecture:', lecture.id)
+        fetch(`/api/lectures/${lecture.id}/process`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            generateSummary: true,
+            generateFlashcards: true,
+            generateQuiz: true,
+          }),
+        })
+          .then(() => fetchLectureHubData())
+          .catch((err) => console.error('[AutoTrigger] Error:', err))
+      }
+    }
+  }, [lecture, jobs])
+
   // Audio HTML5 setup sync
   useEffect(() => {
     if (audioRef.current) {
@@ -702,7 +726,7 @@ export default function StudyHubPage() {
                  {/* Re-process button */}
                  <div className="border-t border-slate-50 pt-3.5 mt-1">
                    <button
-                     disabled={isRetrying || ['queued', 'processing'].includes(lecture.status)}
+                     disabled={isRetrying}
                      onClick={handleRetryPipeline}
                      className="w-full inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-400 text-white font-extrabold py-2.5 px-4 rounded-2xl text-xs shadow-sm hover:shadow transition-all duration-200 cursor-pointer disabled:cursor-not-allowed"
                    >
@@ -712,8 +736,10 @@ export default function StudyHubPage() {
                        <RefreshCw className="w-3.5 h-3.5" />
                      )}
                      <span>
-                       {['queued', 'processing'].includes(lecture.status)
+                       {isRetrying
                          ? t('hub.info.processing')
+                         : ['queued', 'processing'].includes(lecture.status)
+                         ? 'Forza Elaborazione AI'
                          : t('hub.info.reprocess')}
                      </span>
                    </button>
