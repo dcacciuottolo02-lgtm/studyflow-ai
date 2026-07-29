@@ -8,6 +8,7 @@ import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import { createClient } from '@/utils/supabase/client'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { exportToWord } from '@/utils/wordExport'
 import BottomNav from '@/components/BottomNav'
 import {
   ArrowLeft,
@@ -643,6 +644,30 @@ export default function StudyHubPage() {
     document.body.removeChild(link)
   }
 
+  const handleDownloadNotesWord = async () => {
+    if (!lecture || !userNote.trim()) return
+    const formattedDate = formatLectureDate(lecture.recorded_at, lecture.created_at)
+    await exportToWord({
+      title: lecture.title || 'Lezione',
+      courseName: lecture.course_name || 'Corso',
+      date: formattedDate,
+      content: userNote,
+      type: 'notes',
+    })
+  }
+
+  const handleDownloadSummaryWord = async () => {
+    if (!lecture || !summary?.content) return
+    const formattedDate = formatLectureDate(lecture.recorded_at, lecture.created_at)
+    await exportToWord({
+      title: lecture.title || 'Lezione',
+      courseName: lecture.course_name || 'Corso',
+      date: formattedDate,
+      content: summary.content,
+      type: 'summary',
+    })
+  }
+
   // Reruns the entire AI pipeline process route on failure
   const handleRetryPipeline = async () => {
     if (!lecture) return
@@ -1031,7 +1056,19 @@ export default function StudyHubPage() {
               ) : summary ? (
                 <>
                   {/* Markdown Summary Content */}
-                  <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-3xl shadow-soft-md text-left">
+                  <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-3xl shadow-soft-md text-left flex flex-col gap-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                        Riassunto della Lezione
+                      </span>
+                      <button
+                        onClick={handleDownloadSummaryWord}
+                        className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer border border-indigo-100/50 shadow-sm"
+                      >
+                        <Download className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Esporta Word (.docx)</span>
+                      </button>
+                    </div>
                     <ReactMarkdown
                       components={{
                         h2: ({ ...props }) => <h2 className="text-xl font-black text-slate-850 mt-6 mb-3 first:mt-0" {...props} />,
@@ -1517,14 +1554,25 @@ export default function StudyHubPage() {
                   </button>
 
                   {userNote.trim() && (
-                    <button
-                      onClick={handleDownloadNotes}
-                      className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 font-extrabold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer"
-                      title="Scarica i tuoi appunti in formato Markdown"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Esporta .md</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleDownloadNotes}
+                        className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer"
+                        title="Scarica i tuoi appunti in formato Markdown"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Markdown (.md)</span>
+                      </button>
+
+                      <button
+                        onClick={handleDownloadNotesWord}
+                        className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs transition-all cursor-pointer shadow-md shadow-indigo-100"
+                        title="Scarica i tuoi appunti in formato Microsoft Word (.docx)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Esporta Word (.docx)</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
