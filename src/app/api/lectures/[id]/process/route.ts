@@ -193,15 +193,18 @@ async function runNodePipeline(
         .eq('job_type', 'transcription')
     } catch (err: any) {
       console.error(`[AI Node Pipeline - Job 1] Errore trascrizione:`, err)
+      const nowStr = new Date().toISOString()
+      const errorMsg = err.message || 'Trascrizione fallita'
+
       await supabase
         .from('ai_jobs')
         .update({
           status: 'failed',
-          completed_at: new Date().toISOString(),
-          error_message: err.message || 'Trascrizione fallita',
+          completed_at: nowStr,
+          error_message: errorMsg,
         })
         .eq('lecture_id', lectureId)
-        .eq('job_type', 'transcription')
+        .in('status', ['queued', 'running', 'retrying'])
 
       await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
       throw err
@@ -826,7 +829,7 @@ export async function POST(
           error_message: `Fatal server error: ${err.message}`,
         })
         .eq('lecture_id', lectureId)
-        .eq('status', 'queued')
+        .in('status', ['queued', 'running', 'retrying'])
     } catch (dbErr) {
       console.error('[Route POST] Impossibile effettuare rollback status nel database:', dbErr)
     }

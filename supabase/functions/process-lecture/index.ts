@@ -186,15 +186,18 @@ async function runPipeline(
 
       } catch (err: any) {
         console.error(`[AI Edge - Job 1] Failed:`, err)
+        const nowStr = new Date().toISOString()
+        const errorMsg = err.message || 'Transcription failed'
+
         await supabase
           .from('ai_jobs')
           .update({
             status: 'failed',
-            completed_at: new Date().toISOString(),
-            error_message: err.message || 'Transcription failed',
+            completed_at: nowStr,
+            error_message: errorMsg,
           })
           .eq('lecture_id', lectureId)
-          .eq('job_type', 'transcription')
+          .in('status', ['queued', 'running', 'retrying'])
 
         await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
         return
@@ -648,7 +651,19 @@ Trascrizione:
     console.log(`[AI Edge] Finished processing lecture ${lectureId}. finalSMStatus: ${finalSMStatus}, finalLectureStatus: ${finalLectureStatus}`)
   } catch (err: any) {
     console.error(`[AI Edge] Fatal pipeline failure:`, err)
+    const nowStr = new Date().toISOString()
+    const errorMsg = `Fatal pipeline error: ${err.message || err}`
+
     await supabase.from('lectures').update({ status: 'failed' }).eq('id', lectureId)
+    await supabase
+      .from('ai_jobs')
+      .update({
+        status: 'failed',
+        completed_at: nowStr,
+        error_message: errorMsg,
+      })
+      .eq('lecture_id', lectureId)
+      .in('status', ['queued', 'running', 'retrying'])
   }
 }
 
