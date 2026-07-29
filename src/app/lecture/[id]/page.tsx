@@ -1010,7 +1010,7 @@ export default function StudyHubPage() {
                     }`}
                   >
                     <Icon className="w-4 h-4 shrink-0" />
-                    <span className="hidden sm:inline">{tab.label}</span>
+                    <span className="text-[10px] sm:text-xs font-extrabold truncate">{tab.label}</span>
                   </button>
                 )
               })}
