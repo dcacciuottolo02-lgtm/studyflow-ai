@@ -141,7 +141,7 @@ async function runNodePipeline(
     }
 
     const arrayBuffer = await fileData.arrayBuffer()
-    const base64Audio = Buffer.from(arrayBuffer).toString('base64')
+    let base64Audio: string | null = Buffer.from(arrayBuffer).toString('base64')
 
     const fileExtension = pathInsideBucket.split('.').pop()?.toLowerCase() || 'webm'
     const mimeTypeMap: Record<string, string> = {
@@ -171,10 +171,13 @@ async function runNodePipeline(
         () =>
           model.generateContent([
             { text: transcriptionPrompt },
-            { inlineData: { data: base64Audio, mimeType: audioMimeType } },
+            { inlineData: { data: base64Audio!, mimeType: audioMimeType } },
           ]),
         { jobLabel: 'Job 1 Transcription', supabase, lectureId, jobType: 'transcription' }
       )
+
+      // Immediately release heavy base64 audio memory to prevent memory overhead
+      base64Audio = null
 
       transcriptText = response.response.text()
       if (!transcriptText || transcriptText.trim().length === 0) {

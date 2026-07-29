@@ -134,8 +134,7 @@ async function runPipeline(
         throw new Error(`Failed to download audio file: ${downloadError?.message}`)
       }
 
-      const arrayBuffer = await fileData.arrayBuffer()
-      const base64Audio = encodeBase64(new Uint8Array(arrayBuffer))
+      let base64Audio: string | null = encodeBase64(new Uint8Array(arrayBuffer))
       
       const fileExtension = pathInsideBucket.split('.').pop()?.toLowerCase() || 'webm'
       const mimeTypeMap: Record<string, string> = {
@@ -163,10 +162,13 @@ async function runPipeline(
         const response = await callGeminiWithRetry(
           () => model.generateContent([
             { text: transcriptionPrompt },
-            { inlineData: { data: base64Audio, mimeType: audioMimeType } },
+            { inlineData: { data: base64Audio!, mimeType: audioMimeType } },
           ]),
           { jobLabel: 'Job 1 Transcription', supabase, lectureId, jobType: 'transcription' }
         )
+
+        // Immediately release heavy base64 audio memory to prevent 256MB Deno limit crash
+        base64Audio = null
 
         transcriptText = response.response.text()
         if (!transcriptText || transcriptText.trim().length === 0) {
