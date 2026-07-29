@@ -686,22 +686,20 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Trigger the heavy processing pipeline in the background using Deno Deploy's EdgeRuntime.waitUntil
-    EdgeRuntime.waitUntil(
-      runPipeline(
-        lectureId,
-        token,
-        !!generateSummary,
-        !!generateFlashcards,
-        !!generateQuiz,
-        contentLanguage || 'it'
-      )
+    // Execute processing pipeline synchronously to prevent Deno EarlyDrop isolate cancellation
+    await runPipeline(
+      lectureId,
+      token,
+      !!generateSummary,
+      !!generateFlashcards,
+      !!generateQuiz,
+      contentLanguage || 'it'
     )
 
     return new Response(
-      JSON.stringify({ success: true, message: 'Processing started in background on Supabase.' }),
+      JSON.stringify({ success: true, message: 'Processing completed successfully on Supabase.' }),
       {
-        status: 202,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     )
