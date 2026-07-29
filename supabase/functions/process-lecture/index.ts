@@ -289,16 +289,21 @@ async function runPipeline(
         }
 
         console.log('[SUPABASE CLOUD EDGE FUNCTION] Generating summary with temperature: 0.2...')
-        const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite specializzato nella creazione di Materiali di Studio Accademici Perfetti.
+        const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite specializzato nella creazione di Materiali di Studio Accademici Perfetti ed Esaustivi.
 
 OBIETTIVO PRINCIPALE:
-Generare un riassunto di studio COMPLETO, DETTAGLIATO, STRUTTURATO ed ESTETICAMENTE ECCELLENTE in Markdown. Lo studente deve poter studiare e preparare l'esame leggendo questo riassunto, trovandovi spiegate in modo chiaro ed esaustivo TUTTE le nozioni, le definizioni, le distinzioni, gli esempi e i passaggi concettuali presenti nella trascrizione.
+Generare un documento di studio COMPLETO, DETTAGLIATO, STRUTTURATO ed ESTETICAMENTE PERFETTO in Markdown. Lo studente deve poter studiare e preparare l'esame leggendo questo riassunto, trovandovi spiegati in modo chiaro ed esaustivo TUTTI i concetti, le definizioni, le distinzioni, gli esempi e i passaggi concettuali presenti nella trascrizione, senza omissioni.
 
-REGOLE DI COMPRENSIONE ED EROGAZIONE DEI CONTENUTI:
-1. ESEGESI E PROFONDITÀ PEDAGOGICA: Non limitarti a brevi sintesi o elenchi telegrafici. Per ogni argomento spiegato dal docente, sviluppa una spiegazione approfondita che descriva: COS'È, COME FUNZIONA, PERCHÉ È IMPORTANTE, e le eventuali DIFFERENZE o CATEGORIZZAZIONI spiegate nel testo (es. differenze tra concetti, sotto-categorie come Demografiche/Geografiche/Psicografiche, o le fasi del piano).
-2. TABELLE E SCHEMI DI CONFRONTO: Se nella lezione vengono messi a confronto due o più concetti o metodologie (es. Marketing Digitale vs Tradizionale, o Strategia vs Tattica), includi sempre una TABELLA MARKDOWN di confronto o uno schema sintetico per facilitare la memorizzazione visiva dello studente.
-3. RIGOROSA ACCURATEZZA (ANTI-ALLUCINAZIONE): Ogni concetto, definizione, suddivisione o esempio DEVE essere rigorosamente basato sulle informazioni realmente presenti nella trascrizione. È severamente vietato inventare dati, formule matematiche o fatti esterni non trattati dal docente.
-4. TRASCRIZIONI INCOMPLETE O CORTE: Solo se la trascrizione è palesemente interrotta all'introduzione prima della spiegazione dei contenuti, prendine atto e dichiara la brevità del testo senza inventare le parti mancanti. Ma per trascrizioni esplicative e ricche, fornisci un riassunto esaustivo e senza omissioni.
+REGOLE FONDAMENTALI ANTI-ALLUCINAZIONE (REGOLA ASSOLUTA):
+1. RIGOROSA ADERENZA AL TESTO: Ogni concetto, definizione, suddivisione o esempio DEVE basarsi esclusivamente sulle informazioni esplicitamente presenti nella trascrizione fornita. È SEVERAMENTE VIETATO introdurre conoscenze esterne, teorie non menzionate o concetti inventati.
+2. DIVIETO ASSOLUTO DI INVENTARE FORMULE O DATI NUMERICI: Non inventare o ipotizzare formule matematiche, equazioni, percentuali, cifre o statistiche che non siano state esplicitamente pronunciate o spiegate nella trascrizione.
+3. TRASCRIZIONI INCOMPLETE O CORTE: Solo se la trascrizione fornita è palesemente breve, incompleta o si interrompe all'introduzione prima della spiegazione dei contenuti, prendine atto e dichiara con trasparenza la brevità del testo senza inventare le parti mancanti.
+
+REGOLE DI COMPLETEZZA E DETTAGLIO PEDAGOGICO (DIVIETO DI PIGRIZIA DI SINTESI):
+4. COMPLETEZZA E DETTAGLI CONCRETI: Il riassunto non deve essere una sintesi compressa, ma un documento di studio completo. Includi TUTTI gli esempi concreti, le analogie, i paragoni e i dettagli specifici che il relatore fornisce per illustrare ogni concetto (es. confronti di costo come annunci New York Times o spot Super Bowl, esempi di piattaforme o canali) - non limitarti a nominare il concetto, spiega esattamente come viene illustrato nel testo originale.
+5. DETTAGLIO NELLE SOTTOCATEGORIE: Quando un concetto viene scomposto in sotto-elementi (es. categorie dell'avatar, fasi del piano, vantaggi specifici), non limitarti a elencarli per nome. Spiega brevemente cosa include ciascuno, riportando i dettagli e gli esempi specifici forniti nella trascrizione (es. per la demografia: età, genere, reddito, occupazione; per la psicografia: valori, atteggiamenti, credenze, stile di vita).
+6. CITAZIONI DIRETTE RILEVANTI: Se il relatore usa una frase particolarmente efficace, incisiva o memorabile per riassumere un'idea chiave (es. "Customers don't buy when they understand; they buy when they feel understood"), includila nel riassunto tra virgolette ("..."), attribuendola chiaramente come citazione diretta dalla lezione.
+7. BILANCIAMENTO TRA COMPLETEZZA E ANTI-ALLUCINAZIONE: Questa richiesta di completezza ed esaustività si applica SOLO a contenuti realmente espressi nella trascrizione. Il modello deve essere esaustivo su tutto ciò che è stato realmente detto, senza omettere dettagli reali per pigrizia di sintesi, ma senza MAI inventare nulla di nuovo. La regola "non allucinare" resta assoluta, la nuova regola è "non omettere dettagli reali".
 
 STRUTTURA MARKDOWN RICHIESTA (RICCA ED ELEGANTE):
 # 📌 [Titolo Accademico e Chiaro della Lezione]
@@ -310,17 +315,18 @@ STRUTTURA MARKDOWN RICHIESTA (RICCA ED ELEGANTE):
 [Per ogni macro-argomento o pilastro concettuale spiegato dal docente:]
 ### 🔹 [Nome del Concetto/Modulo]
 - **Definizione e Significato**: [Spiegazione dettagliata e chiara]
-- **Funzionamento e Dettagli Chiave**: [Spiegazione esaustiva di tutti i punti, sotto-categorie o regole spiegate nel testo]
-- **Esempi o Casi Pratici**: [Gli esempi concreti o le applicazioni citate dal docente]
+- **Funzionamento e Dettagli Chiave**: [Spiegazione esaustiva di tutti i punti, sotto-categorie o sotto-elementi spiegati nel testo]
+- **Esempi Concreti e Paragoni**: [Tutti gli esempi pratici, i confronti o le analogie citate dal docente per illustrare il concetto]
+- **Citazioni Rilevanti**: ["..." (Citazione diretta dal docente, se presente una frase incisiva nel testo)]
 
 ## 📊 3. Confronti Concettuali e Schemi Sintetici
 [Tabella Markdown o confronto schematico tra i concetti chiave o i vantaggi/svantaggi spiegati]
 
-## 🧠 4. Concetti Chiave da Memorizzare per l'Esame
-[Elenco puntato con i termini, le definizioni chiave e le categorizzazioni da sapere a memoria]
+## 🧠 4. Termini e Definizioni Fondamentali
+[Elenco puntato con i termini tecnici, le definizioni chiave e le categorizzazioni da sapere per il ripasso, con i relativi dettagli descrittivi dal testo]
 
-## 🎯 5. Focus Esame e Domande di Autovalutazione
-[Punti critici, consigli strategici per l'esame e 2-3 domande di riflessione basate sui contenuti realmente spiegati nella lezione]
+## 🎯 5. Focus Esame e Quesiti di Autovalutazione
+[Se il professore ha realmente fornito indicazioni o dettagli sull'esame nella lezione, riportali distintamente e chiaramente come tali. Aggiungi poi 2-3 quesiti di autovalutazione. NOTA BENE: Le domande di autovalutazione che generi sono uno strumento di studio creato da te per aiutare la preparazione dello studente e NON vanno presentate come se il professore le avesse effettivamente menzionate nella lezione.]
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
