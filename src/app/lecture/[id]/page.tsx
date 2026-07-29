@@ -31,6 +31,11 @@ import {
   Award,
   Search,
   Info,
+  Edit3,
+  Save,
+  Download,
+  Clock,
+  Trash2,
 } from 'lucide-react'
 
 interface Lecture {
@@ -127,10 +132,16 @@ export default function StudyHubPage() {
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([])
   
   // Navigation & loaders state
-  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript'>('summary')
+  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript' | 'notes'>('summary')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
+
+  // User Personal Notes states
+  const [userNote, setUserNote] = useState<string>('')
+  const [isNoteSaving, setIsNoteSaving] = useState(false)
+  const [isNoteSaved, setIsNoteSaved] = useState(true)
+  const saveNoteTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   // Audio Player states & refs
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
@@ -372,6 +383,17 @@ export default function StudyHubPage() {
         }
       }
 
+      // Fetch User Personal Notes
+      const { data: noteRes } = await supabase
+        .from('user_notes')
+        .select('content')
+        .eq('lecture_id', lectureId)
+        .maybeSingle()
+
+      if (noteRes) {
+        setUserNote(noteRes.content || '')
+      }
+
     } catch (err) {
       console.error('Error loading study hub data:', err)
       setError('Si è verificato un errore durante il recupero dei dati.')
@@ -561,6 +583,64 @@ export default function StudyHubPage() {
     setQuizScore(null)
     setQuizFilter('all')
     setCurrentQuizWizardStep(0)
+  }
+
+  // Handle debounced auto-save for User Personal Notes
+  const handleUserNoteChange = (newContent: string) => {
+    setUserNote(newContent)
+    setIsNoteSaved(false)
+    setIsNoteSaving(true)
+
+    if (saveNoteTimeoutRef.current) {
+      clearTimeout(saveNoteTimeoutRef.current)
+    }
+
+    saveNoteTimeoutRef.current = setTimeout(async () => {
+      try {
+        const supabase = createClient()
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+
+        if (!user) return
+
+        const { error: upsertErr } = await supabase.from('user_notes').upsert(
+          {
+            lecture_id: lectureId,
+            user_id: user.id,
+            content: newContent,
+          },
+          { onConflict: 'lecture_id' }
+        )
+
+        if (upsertErr) console.error('[User Note Upsert Error]:', upsertErr)
+
+        setIsNoteSaving(false)
+        setIsNoteSaved(true)
+      } catch (err) {
+        console.error('Error saving user note:', err)
+        setIsNoteSaving(false)
+      }
+    }, 800)
+  }
+
+  const handleInsertTimestamp = () => {
+    const timeSecs = audioRef.current?.currentTime || currentTime || 0
+    const m = Math.floor(timeSecs / 60)
+    const s = Math.floor(timeSecs % 60)
+    const formattedStamp = `\n⏱️ [${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}] `
+    handleUserNoteChange(userNote + formattedStamp)
+  }
+
+  const handleDownloadNotes = () => {
+    const blob = new Blob([userNote], { type: 'text/markdown;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `${lecture?.title || 'Lezione'}_Note.md`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   // Reruns the entire AI pipeline process route on failure
@@ -912,6 +992,7 @@ export default function StudyHubPage() {
                 { id: 'flashcards', label: t('hub.tabs.flashcards'), icon: BookOpen },
                 { id: 'quiz', label: t('hub.tabs.quiz'), icon: HelpCircle },
                 { id: 'transcript', label: t('hub.tabs.transcript'), icon: HelpIcon },
+                { id: 'notes', label: 'Note', icon: Edit3 },
               ].map((tab) => {
                 const Icon = tab.icon
                 const active = activeTab === tab.id
@@ -1404,6 +1485,62 @@ export default function StudyHubPage() {
                   {t('hub.transcript.noContent')}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 5: USER PERSONAL NOTES */}
+          {activeTab === 'notes' && (
+            <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-3xl shadow-soft-md text-left flex flex-col gap-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-650">
+                    <Edit3 className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <h3 className="font-extrabold text-sm text-slate-850">
+                      Note Personali dello Studente
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {isNoteSaving ? '⏳ Salvataggio in corso...' : isNoteSaved ? '🟢 Salvato nel tuo account' : '⚪ Modifiche non salvate'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleInsertTimestamp}
+                    className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer"
+                    title="Inserisci timestamp dell'audio al punto riprodotto"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>+ Timestamp</span>
+                  </button>
+
+                  {userNote.trim() && (
+                    <button
+                      onClick={handleDownloadNotes}
+                      className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 font-extrabold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer"
+                      title="Scarica i tuoi appunti in formato Markdown"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Esporta .md</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <textarea
+                  value={userNote}
+                  onChange={(e) => handleUserNoteChange(e.target.value)}
+                  placeholder="Scrivi qui i tuoi appunti e le tue riflessioni personali sulla lezione... Puoi usare il pulsante '+ Timestamp' per ancorare le note ai minuti esatti dell'audio."
+                  className="w-full min-h-[360px] p-4 text-xs sm:text-sm font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-indigo-500 focus:bg-white transition-all leading-relaxed resize-y shadow-inner"
+                />
+                <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold px-1">
+                  <span>{userNote.length} caratteri</span>
+                  <span>Salvataggio automatico istantaneo nel cloud</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
