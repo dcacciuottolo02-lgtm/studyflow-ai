@@ -771,6 +771,7 @@ export async function POST(
     // Try invoking Edge Function with authorization header first
     let edgeFunctionSuccess = false
     try {
+      console.log('[EXECUTION PATH] Attempting invocation of Supabase Cloud Edge Function (process-lecture)...')
       const { data: invokeData, error: invokeErr } = await supabase.functions.invoke('process-lecture', {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -786,14 +787,17 @@ export async function POST(
 
       if (!invokeErr && invokeData && invokeData.success) {
         edgeFunctionSuccess = true
-        console.log('[Route POST] Invocation Edge Function riuscita con successo:', invokeData)
+        console.log('[EXECUTION PATH SUCCESS] Supabase Cloud Edge Function executed successfully:', invokeData)
+      } else {
+        console.warn('[EXECUTION PATH FALLBACK] Edge Function returned error or incomplete response, using local Node pipeline:', invokeErr)
       }
     } catch (edgeErr) {
-      console.warn('[Route POST] Eccezione durante invocation Edge Function, attivo pipeline sincrona Node:', edgeErr)
+      console.warn('[EXECUTION PATH FALLBACK] Edge Function invocation exception, using local Node pipeline:', edgeErr)
     }
 
     // Direct synchronous execution to ensure Vercel / Next.js Serverless finishes the AI pipeline before ending response
     if (!edgeFunctionSuccess) {
+      console.log('[EXECUTION PATH] Running local Next.js Node pipeline (runNodePipeline)...')
       await runNodePipeline(lectureId, supabase, {
         generateSummary: !!generateSummary,
         generateFlashcards: !!generateFlashcards,

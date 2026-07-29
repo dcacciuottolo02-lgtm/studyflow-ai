@@ -285,6 +285,7 @@ async function runPipeline(
           required: ['content', 'key_concepts'],
         }
 
+        console.log('[SUPABASE CLOUD EDGE FUNCTION] Generating summary with temperature: 0.2...')
         const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite focalizzato su massima accuratezza ed aderenza al testo.
 
 REGOLE FONDAMENTALI ANTI-ALLUCINAZIONE:
