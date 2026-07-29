@@ -986,7 +986,7 @@ export default function StudyHubPage() {
             )}
 
             {/* Tab Navigation (Instagram Profile Style) */}
-            <div className="border-t border-b border-slate-100 bg-white flex items-center justify-around w-full z-10 -mx-6 px-4 sm:mx-0 sm:rounded-3xl sm:border">
+            <div className="border-t border-b border-slate-100 bg-white flex items-center justify-around w-full z-10 -mx-6 px-4 sm:mx-0 sm:rounded-3xl sm:border overflow-x-auto scrollbar-none">
               {[
                 { id: 'summary', label: t('hub.tabs.summary'), icon: FileText },
                 { id: 'flashcards', label: t('hub.tabs.flashcards'), icon: BookOpen },
