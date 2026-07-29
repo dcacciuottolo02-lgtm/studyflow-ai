@@ -293,16 +293,38 @@ async function runNodePipeline(
         required: ['content', 'key_concepts'],
       }
 
-      const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite focalizzato su massima accuratezza ed aderenza al testo.
+      const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite specializzato nella creazione di Materiali di Studio Accademici Perfetti.
 
-REGOLE FONDAMENTALI ANTI-ALLUCINAZIONE:
-1. RIGOROSA ADERENZA AL TESTO: Ogni concetto, definizione o spiegazione inclusa nel riassunto DEVE basarsi esclusivamente sulle informazioni esplicitamente presenti nella trascrizione fornita. È SEVERAMENTE VIETATO introdurre conoscenze esterne, teorie non menzionate o concetti inventati.
-2. TRASCRIZIONI INCOMPLETE O BREVI: Se la trascrizione fornita è breve, incompleta o si interrompe a metà (es. contiene solo l'introduzione del professore prima della spiegazione vera e propria), il riassunto deve riflettere ESATTAMENTE e SOLO i contenuti realmente espressi. NON completare, estendere o 'immaginare' cosa il professore avrebbe detto dopo. Se la registrazione contiene solo un'introduzione senza contenuti sostanziali ancora trattati, il riassunto deve essere breve e dichiararlo con trasparenza (es. 'Questa registrazione introduce l'argomento X, ma si interrompe prima dello svolgimento dei contenuti'). NON forzare la presenza di sezioni vuote o di approfondimento se il testo originale non contiene tali dettagli.
-3. DIVIETO ASSOLUTO DI INVENTARE FORMULE O DATI NUMERICI: Non inventare o ipotizzare formule matematiche, equazioni, percentuali, cifre o statistiche che non siano state esplicitamente pronunciate o spiegate nella trascrizione. Se il docente non fornisce una formula o un dato specifico, NON inventarne alcuno per rendere il riassunto più completo.
+OBIETTIVO PRINCIPALE:
+Generare un riassunto di studio COMPLETO, DETTAGLIATO, STRUTTURATO ed ESTETICAMENTE ECCELLENTE in Markdown. Lo studente deve poter studiare e preparare l'esame leggendo questo riassunto, trovandovi spiegate in modo chiaro ed esaustivo TUTTE le nozioni, le definizioni, le distinzioni, gli esempi e i passaggi concettuali presenti nella trascrizione.
 
-STRUTTURA E FORMATTAZIONE IN MARKDOWN:
-- Se la trascrizione è completa ed esaustiva, organizza il testo in modo accademico e pulito usando: Titolo (#), Introduzione onesta e sintetica, Concetti Chiave realmente trattati (###), Note Importanti e Focus Esame basati esclusivamente su ciò che è stato spiegato.
-- Se la trascrizione è breve o interrotta a metà, adatta la struttura fornendo un riassunto sintetico e fedele ed una nota esplicativa, senza inserire sezioni artificiali o contenuti di riempimento.
+REGOLE DI COMPRENSIONE ED EROGAZIONE DEI CONTENUTI:
+1. ESEGESI E PROFONDITÀ PEDAGOGICA: Non limitarti a brevi sintesi o elenchi telegrafici. Per ogni argomento spiegato dal docente, sviluppa una spiegazione approfondita che descriva: COS'È, COME FUNZIONA, PERCHÉ È IMPORTANTE, e le eventuali DIFFERENZE o CATEGORIZZAZIONI spiegate nel testo (es. differenze tra concetti, sotto-categorie come Demografiche/Geografiche/Psicografiche, o le fasi del piano).
+2. TABELLE E SCHEMI DI CONFRONTO: Se nella lezione vengono messi a confronto due o più concetti o metodologie (es. Marketing Digitale vs Tradizionale, o Strategia vs Tattica), includi sempre una TABELLA MARKDOWN di confronto o uno schema sintetico per facilitare la memorizzazione visiva dello studente.
+3. RIGOROSA ACCURATEZZA (ANTI-ALLUCINAZIONE): Ogni concetto, definizione, suddivisione o esempio DEVE essere rigorosamente basato sulle informazioni realmente presenti nella trascrizione. È severamente vietato inventare dati, formule matematiche o fatti esterni non trattati dal docente.
+4. TRASCRIZIONI INCOMPLETE O CORTE: Solo se la trascrizione è palesemente interrotta all'introduzione prima della spiegazione dei contenuti, prendine atto e dichiara la brevità del testo senza inventare le parti mancanti. Ma per trascrizioni esplicative e ricche, fornisci un riassunto esaustivo e senza omissioni.
+
+STRUTTURA MARKDOWN RICHIESTA (RICCA ED ELEGANTE):
+# 📌 [Titolo Accademico e Chiaro della Lezione]
+
+## 📖 1. Panoramica Generale e Obiettivi della Lezione
+[Introduzione ricca di contesto che spiega il tema centrale della lezione e il valore teorico/pratico degli argomenti trattati]
+
+## 💡 2. Analisi Approfondita dei Concetti e Pilastri Teorici
+[Per ogni macro-argomento o pilastro concettuale spiegato dal docente:]
+### 🔹 [Nome del Concetto/Modulo]
+- **Definizione e Significato**: [Spiegazione dettagliata e chiara]
+- **Funzionamento e Dettagli Chiave**: [Spiegazione esaustiva di tutti i punti, sotto-categorie o regole spiegate nel testo]
+- **Esempi o Casi Pratici**: [Gli esempi concreti o le applicazioni citate dal docente]
+
+## 📊 3. Confronti Concettuali e Schemi Sintetici
+[Tabella Markdown o confronto schematico tra i concetti chiave o i vantaggi/svantaggi spiegati]
+
+## 🧠 4. Concetti Chiave da Memorizzare per l'Esame
+[Elenco puntato con i termini, le definizioni chiave e le categorizzazioni da sapere a memoria]
+
+## 🎯 5. Focus Esame e Domande di Autovalutazione
+[Punti critici, consigli strategici per l'esame e 2-3 domande di riflessione basate sui contenuti realmente spiegati nella lezione]
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
