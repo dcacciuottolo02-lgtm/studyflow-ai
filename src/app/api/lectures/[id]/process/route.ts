@@ -290,26 +290,16 @@ async function runNodePipeline(
         required: ['content', 'key_concepts'],
       }
 
-      const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite.
-IMPORTANTE: Genera il riassunto dell'intera lezione ed i relativi concetti chiave esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+      const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite focalizzato su massima accuratezza ed aderenza al testo.
 
-Basandoti sulla trascrizione fornita, genera un riassunto della lezione estremamente dettagliato, accademico, ben organizzato e visivamente ordinato in formato Markdown.
+REGOLE FONDAMENTALI ANTI-ALLUCINAZIONE:
+1. RIGOROSA ADERENZA AL TESTO: Ogni concetto, definizione o spiegazione inclusa nel riassunto DEVE basarsi esclusivamente sulle informazioni esplicitamente presenti nella trascrizione fornita. È SEVERAMENTE VIETATO introdurre conoscenze esterne, teorie non menzionate o concetti inventati.
+2. TRASCRIZIONI INCOMPLETE O BREVI: Se la trascrizione fornita è breve, incompleta o si interrompe a metà (es. contiene solo l'introduzione del professore prima della spiegazione vera e propria), il riassunto deve riflettere ESATTAMENTE e SOLO i contenuti realmente espressi. NON completare, estendere o 'immaginare' cosa il professore avrebbe detto dopo. Se la registrazione contiene solo un'introduzione senza contenuti sostanziali ancora trattati, il riassunto deve essere breve e dichiararlo con trasparenza (es. 'Questa registrazione introduce l'argomento X, ma si interrompe prima dello svolgimento dei contenuti'). NON forzare la presenza di sezioni vuote o di approfondimento se il testo originale non contiene tali dettagli.
+3. DIVIETO ASSOLUTO DI INVENTARE FORMULE O DATI NUMERICI: Non inventare o ipotizzare formule matematiche, equazioni, percentuali, cifre o statistiche che non siano state esplicitamente pronunciate o spiegate nella trascrizione. Se il docente non fornisce una formula o un dato specifico, NON inventarne alcuno per rendere il riassunto più completo.
 
-STRUTTURA E REGOLE DI FORMATTAZIONE RICHIESTE:
-1. **Titolo della Lezione**: Inizia con un titolo accattivante e chiaro usando l'intestazione markdown (es. '# Titolo della Lezione').
-2. **Tabella dei Contenuti / Indice**: Crea un piccolo indice testuale all'inizio per mostrare la struttura del riassunto.
-3. **Introduzione**: Fornisci un'introduzione fluida, ricca di contesto ed elegante (minimo 150 parole). Usa del testo in grassetto per evidenziare le parole chiave principali.
-4. **Concetti Chiave**: Per ogni concetto chiave menzionato nella lezione:
-   - Crea una sotto-sezione con intestazione '### [Nome del Concetto]'
-   - Spiega il concetto in modo approfondito, descrivendo la sua definizione, il suo funzionamento ed eventuali esempi pratici menzionati.
-   - Utilizza elenchi puntati strutturati, tabelle di confronto (se applicabili) ed evidenziazioni grafiche.
-5. **Note Importanti**: Aggiungi consigli pratici, eccezioni, formule o note di approfondimento strutturate con elenchi puntati e spiegazioni chiare.
-6. **Focus Esame**: Elenca in modo ordinato e schematico le potenziali domande d'esame, i punti critici da memorizzare e i suggerimenti strategici per superare la prova su questo argomento.
-
-REGOLE GENERALI:
-- Mantieni un tono accademico, formale ma facilmente comprensibile.
-- Evita paragrafi troppo lunghi e noiosi; usa elenchi, grassetti strategici e paragrafi distanziati per rendere la lettura riposante e piacevole.
-- Non includere placeholders o testo vuoto.
+STRUTTURA E FORMATTAZIONE IN MARKDOWN:
+- Se la trascrizione è completa ed esaustiva, organizza il testo in modo accademico e pulito usando: Titolo (#), Introduzione onesta e sintetica, Concetti Chiave realmente trattati (###), Note Importanti e Focus Esame basati esclusivamente su ciò che è stato spiegato.
+- Se la trascrizione è breve o interrotta a metà, adatta la struttura fornendo un riassunto sintetico e fedele ed una nota esplicativa, senza inserire sezioni artificiali o contenuti di riempimento.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
@@ -323,6 +313,7 @@ Trascrizione:
             generationConfig: {
               responseMimeType: 'application/json',
               responseSchema: summarySchema as any,
+              temperature: 0.2,
             },
           }),
         { jobLabel: 'Job 2 Summary', supabase, lectureId, jobType: 'summary' }
