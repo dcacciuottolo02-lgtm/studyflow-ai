@@ -134,6 +134,7 @@ async function runPipeline(
         throw new Error(`Failed to download audio file: ${downloadError?.message}`)
       }
 
+      const arrayBuffer = await fileData.arrayBuffer()
       let base64Audio: string | null = encodeBase64(new Uint8Array(arrayBuffer))
       
       const fileExtension = pathInsideBucket.split('.').pop()?.toLowerCase() || 'webm'
