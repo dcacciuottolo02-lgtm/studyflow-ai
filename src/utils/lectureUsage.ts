@@ -42,17 +42,9 @@ export async function checkUsageStatus(): Promise<UsageStatus> {
     }
 
     const plan = (profile?.plan === 'pro') ? 'pro' : 'free'
+    const limit = plan === 'pro' ? 12 : 3
 
-    if (plan === 'pro') {
-      return {
-        plan: 'pro',
-        used: 0,
-        limit: Infinity,
-        isExceeded: false,
-      }
-    }
-
-    // 3. Count current month's processed lectures for Free users
+    // 3. Count current month's processed lectures
     const now = new Date()
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
 
@@ -67,15 +59,14 @@ export async function checkUsageStatus(): Promise<UsageStatus> {
       console.error('[Usage] Error counting monthly lectures:', countError)
       // Fail-safe: assume 0 used so we don't lock out the user in case of query failure
       return {
-        plan: 'free',
+        plan,
         used: 0,
-        limit: 3,
+        limit,
         isExceeded: false,
       }
     }
 
     const used = count || 0
-    const limit = 3
     const isExceeded = used >= limit
 
     return {

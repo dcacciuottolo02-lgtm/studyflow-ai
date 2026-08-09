@@ -134,6 +134,7 @@ export default function StudyHubPage() {
   
   // Navigation & loaders state
   const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript' | 'notes'>('summary')
+  const [userPlan, setUserPlan] = useState<'free' | 'pro'>('free')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
@@ -237,6 +238,19 @@ export default function StudyHubPage() {
       if (userError || !user) {
         router.push('/login')
         return
+      }
+
+      // Fetch user profile plan
+      const { data: userProfile } = await supabase
+        .from('users')
+        .select('plan')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (userProfile?.plan === 'pro') {
+        setUserPlan('pro')
+      } else {
+        setUserPlan('free')
       }
 
       console.log('[StudyHub] Loading lecture with ID:', lectureId)
@@ -1126,13 +1140,19 @@ export default function StudyHubPage() {
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                       {t('hub.flashcards.progress', { current: currentFlashcardIdx + 1, total: flashcards.length })}
                     </span>
-                    <button
-                      onClick={() => handleGenerateModule('flashcards')}
-                      className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100/50 py-1.5 px-3 rounded-xl transition-all duration-200 cursor-pointer shadow-soft-sm hover:scale-[1.01]"
-                    >
-                      <RefreshCw className="w-3 h-3" />
-                      <span>{t('hub.flashcards.regenerate')}</span>
-                    </button>
+                    {userPlan === 'free' ? (
+                      <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl">
+                        ✨ Rigenerazione illimitata solo per PRO
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerateModule('flashcards')}
+                        className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100/50 py-1.5 px-3 rounded-xl transition-all duration-200 cursor-pointer shadow-soft-sm hover:scale-[1.01]"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        <span>{t('hub.flashcards.regenerate')}</span>
+                      </button>
+                    )}
                   </div>
 
                   {/* 3D Flashcard flip container */}
@@ -1253,13 +1273,19 @@ export default function StudyHubPage() {
                   {/* Quiz header with refresh button */}
                   <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
                     <h3 className="font-extrabold text-sm text-slate-700">{t('hub.quiz.title')}</h3>
-                    <button
-                      onClick={() => handleGenerateModule('quiz')}
-                      className="text-xs font-bold text-indigo-650 hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>{t('hub.quiz.regenerate')}</span>
-                    </button>
+                    {userPlan === 'free' ? (
+                      <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl">
+                        ✨ Rigenerazione illimitata solo per PRO
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleGenerateModule('quiz')}
+                        className="text-xs font-bold text-indigo-650 hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>{t('hub.quiz.regenerate')}</span>
+                      </button>
+                    )}
                   </div>
                   
                   {/* Scoreboard block after submission */}
@@ -1290,13 +1316,19 @@ export default function StudyHubPage() {
                             {t('hub.quiz.reviewErrors')}
                           </button>
                         </div>
-                        <button
-                          onClick={() => handleGenerateModule('quiz')}
-                          className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-2.5 px-3 rounded-xl text-xs cursor-pointer shadow-sm hover:shadow flex items-center justify-center gap-1"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5" />
-                          <span>{t('hub.quiz.regenerate')}</span>
-                        </button>
+                        {userPlan === 'free' ? (
+                          <span className="w-full text-center text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 py-2 px-3 rounded-xl">
+                            ✨ Rigenerazione illimitata solo per PRO
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleGenerateModule('quiz')}
+                            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-2.5 px-3 rounded-xl text-xs cursor-pointer shadow-sm hover:shadow flex items-center justify-center gap-1"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5" />
+                            <span>{t('hub.quiz.regenerate')}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}

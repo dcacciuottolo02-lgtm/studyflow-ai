@@ -26,8 +26,8 @@ import {
   Sparkles,
 } from 'lucide-react'
 
-// Maximum recording duration: 3 hours (10,800 seconds)
-const MAX_RECORDING_SECONDS = 10800
+// Maximum recording duration: 1 hour (3,600 seconds)
+const MAX_RECORDING_SECONDS = 3600
 
 function RecordLectureContent() {
   const params = useParams()
@@ -213,7 +213,7 @@ function RecordLectureContent() {
       setRecordingState('stopped')
       stopMicrophoneStream()
       if (autoStop) {
-        setToastText('Registrazione interrotta automaticamente al raggiungimento del limite di 3 ore.')
+        setToastText(language === 'it' ? 'Registrazione interrotta automaticamente al raggiungimento del limite di 1 ora.' : 'Recording automatically stopped upon reaching 1-hour limit.')
       }
     }
   }
@@ -273,6 +273,11 @@ function RecordLectureContent() {
         arrayBuffer,
         (audioBuffer) => {
           const duration = Math.round(audioBuffer.duration)
+          if (duration > 3600) {
+            setError(language === 'it' ? 'Il file audio supera il limite massimo di 1 ora (60 minuti).' : 'Audio file exceeds the maximum 1-hour limit.')
+            setSelectedFile(null)
+            return
+          }
           setUploadedFileDuration(duration)
           setSelectedFile(file)
         },

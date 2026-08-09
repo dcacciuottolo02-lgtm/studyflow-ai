@@ -331,7 +331,8 @@ STRUTTURA MARKDOWN RICHIESTA (RICCA ED ELEGANTE):
 [Elenco puntato con i termini tecnici, le definizioni chiave e le categorizzazioni da sapere per il ripasso, con i relativi dettagli descrittivi dal testo]
 
 ## 🎯 5. Focus Esame e Quesiti di Autovalutazione
-[Se il professore ha realmente fornito indicazioni o dettagli sull'esame nella lezione, riportali distintamente e chiaramente come tali. Aggiungi poi 2-3 quesiti di autovalutazione. NOTA BENE: Le domande di autovalutazione che generi sono uno strumento di studio creato da te per aiutare la preparazione dello studente e NON vanno presentate come se il professore le avesse effettivamente menzionate nella lezione.]
+- **Focus per l'Esame**: [Report di tutti i punti critici, concetti chiave, indicazioni ed elementi utili per la prova d'esame basati esclusivamente sui contenuti realmente espressi nella lezione]
+- **Quesiti di Autovalutazione a Risposta Aperta**: [Genera ESATTAMENTE 5 domande a risposta aperta stimolanti basate sulla lezione per verificare se lo studente ha compreso a fondo gli argomenti. Per ciascuna delle 5 domande, fornisci subito sotto una "Risposta guida / Spiegazione di confronto" per consentire allo studente l'autoverifica]. NOTA BENE: Le domande di autovalutazione sono uno strumento pedagogico creato per lo studio e NON vanno presentate come se il professore le avesse pronunciate nella lezione.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 

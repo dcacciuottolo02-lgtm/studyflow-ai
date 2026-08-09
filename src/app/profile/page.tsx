@@ -477,6 +477,21 @@ export default function ProfilePage() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Pro Monthly Usage Progress */}
+                  <div className="flex flex-col gap-1.5 border border-slate-100 p-3.5 rounded-2xl bg-slate-50/50">
+                    <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5">
+                      <span>{t('profile.usage.monthlyLimit')}</span>
+                      <span>{usage?.used || 0} / 12 {language === 'it' ? 'lezioni' : 'lectures'}</span>
+                    </div>
+                    
+                    <div className="w-full h-2.5 bg-slate-200/60 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 transition-all duration-300"
+                        style={{ width: `${Math.min(((usage?.used || 0) / 12) * 100, 100)}%` }}
+                      />
+                    </div>
+                  </div>
                   
                   <button
                     disabled
@@ -509,7 +524,7 @@ export default function ProfilePage() {
                         className={`h-full transition-all duration-300 ${
                           usage && usage.used >= usage.limit ? 'bg-amber-500' : 'bg-brand-gradient'
                         }`}
-                        style={{ width: `${Math.min(((usage?.used || 0) / 3) * 100, 100)}%` }}
+                        style={{ width: `${Math.min(((usage?.used || 0) / (usage?.limit || 3)) * 100, 100)}%` }}
                       />
                     </div>
 
