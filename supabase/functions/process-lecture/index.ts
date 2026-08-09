@@ -428,17 +428,21 @@ Trascrizione:
           required: ['flashcards'],
         }
 
-        const flashcardsPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
+        const flashcardsPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato in Active Recall e Spaced Repetition per la preparazione agli esami.
 IMPORTANTE: Genera tutte le domande e le risposte delle flashcard esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
 
-Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta di alta qualità pedagogica.
+Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta ad ALTISSIMA QUALITÀ PEDAGOGICA ed EFFICACIA DI APPRENDIMENTO.
 
-REGOLE OBBLIGATORIE PER LE FLASHCARD:
-- Ogni domanda DEVE testare la COMPRENSIONE di un concetto, una definizione, una relazione causale, un meccanismo o un'applicazione pratica.
-- VIETATO creare domande sull'ordine, la sequenza o la posizione in cui gli argomenti sono stati presentati nella lezione (es. "qual è il primo/secondo/terzo elemento menzionato?", "in che ordine sono stati presentati X e Y?").
-- Preferisci domande come: "Cos'è [concetto]?", "Qual è la differenza tra [X] e [Y]?", "Perché [concetto] è importante?", "Come si applica [concetto] in [contesto]?", "Quale problema risolve [concetto]?".
-- Se la lezione menziona più concetti dello stesso tipo (es. 4 elementi, 3 fasi, ecc.), crea una flashcard per ciascuno che ne testi la comprensione INDIVIDUALE (definizione, funzione, importanza), NON la posizione nella lista.
-- Le risposte devono essere chiare, concise e auto-esplicative: uno studente deve poter capire la risposta anche senza rileggere la trascrizione.
+REGOLE OBBLIGATORIE DI QUALITÀ E STRUTTURA INTELLIGENTE PER LE FLASHCARD:
+1. RILEVANZA E PROFONDITÀ ACCADEMICA: Ogni flashcard DEVE focalizzarsi su un concetto chiave, una definizione rigorosa, una distinzione cruciale o un meccanismo spiegato dal docente. Evita domande superficiali, banali o su dettagli irrilevanti.
+2. FORMULAZIONE INTELLIGENTE DELLE DOMANDE (FRONT CARD):
+   - Formula domande chiare, esplicite e contestualizzate che stimolino l'Active Recall (es. "In che modo [concetto X] influenza [risultato Y] secondo il docente?", "Qual è la differenza fondamentale tra [X] e [Y]?", "Quali sono i requisiti per applicare [principio]?").
+   - VIETATO creare domande vaghe o sull'ordine/sequenza di presentazione nel testo (es. "Qual è il primo elemento menzionato?", "In che ordine appaiono X e Y?").
+3. RISPOSTE RICCHE ED AUTO-ESPLICATIVE (BACK CARD):
+   - La risposta non deve mai essere una singola parola o frase mozza. Deve contenere la definizione precisa + la ragione concettuale o un esempio pratico tratto direttamente dalla lezione.
+   - Lo studente, girando la carta, deve poter capire e ripassare il concetto completo senza dover rileggere la trascrizione.
+4. COPERTURA COMPLETA DEI PILASTRI: Distribuisci le domande lungo tutti i macro-argomenti e sottocategorie trattati nella lezione, garantendo che ciascun pilastro concettuale sia testato individualmente.
+5. RIGOROSA ADERENZA ANTI-ALLUCINAZIONE: Ogni risposta deve basarsi esclusivamente sulle informazioni pronunciate o spiegate dal relatore nella trascrizione.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
@@ -545,18 +549,21 @@ Trascrizione:
           required: ['quiz'],
         }
 
-        const quizPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato nella preparazione agli esami.
+        const quizPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un docimologo universitario ed esperto in valutazione dell'apprendimento di alto livello.
 IMPORTANTE: Genera tutte le domande e le opzioni di risposta del quiz esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
 
-Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla di alta qualità pedagogica per l'autovalutazione dello studente. Ogni domanda deve avere esattamente 4 opzioni di risposta ed un indicatore dell'indice dell'opzione corretta (da 0 a 3).
+Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla ad ALTISSIMA PRECISIONE E VALORE EDUCATIVO. Ogni domanda deve avere esattamente 4 opzioni di risposta (da 0 a 3) e l'indice dell'opzione corretta.
 
-REGOLE OBBLIGATORIE PER IL QUIZ:
-- Ogni domanda DEVE testare la COMPRENSIONE concettuale: definizioni, relazioni causali, meccanismi, differenze tra concetti, applicazioni pratiche.
-- VIETATO creare domande sull'ordine o la sequenza di presentazione nella lezione. Sono ESPLICITAMENTE VIETATE domande come: "Qual è il primo/ultimo elemento menzionato?", "In che ordine appaiono X, Y, Z nel testo?", "Quale NON è stato menzionato per primo/ultimo?".
-- I distrattori (opzioni errate) devono essere PLAUSIBILI ma chiaramente distinguibili per chi ha compreso il concetto. Evita distrattori che richiedono di ricordare dettagli arbitrari o l'ordine di presentazione.
-- Buoni distrattori: concetti simili ma con differenze sostanziali, definizioni parzialmente corrette, applicazioni errate di un principio.
-- Cattivi distrattori: opzioni palesemente assurde, dettagli sull'ordine di presentazione, informazioni non correlate.
-- Varia il livello di difficoltà: includi domande di comprensione base (definizioni), domande di analisi (confronti, relazioni causali) e domande di applicazione (casi pratici).
+REGOLE OBBLIGATORIE PER LA COSTRUZIONE INTELLIGENTE DEL QUIZ:
+1. BILANCIAMENTO SECONDO LA TASSONOMIA DI BLOOM:
+   - 30% Domande di Comprensione / Definizioni Chiave: Testare il dominio della terminologia esatta e dei concetti base.
+   - 40% Domande di Analisi & Causa-Effetto: Testare le relazioni di causa-effetto, le differenze critiche tra concetti o il "perché" di un principio.
+   - 30% Domande di Applicazione Pratica: Presentare un caso studio, uno scenario o un problema concreto basato sugli esempi del docente e chiedere di identificare la decisione/soluzione corretta.
+2. DISTRATTORI EDUCATIVI E INTELLIGENTI (LE 3 OPZIONI ERRATE):
+   - I distrattori DEVONO rappresentare i misconcetti tipici o gli errori di ragionamento che uno studente farebbe se avesse studiato in modo superficiale o compreso solo parzialmente la lezione.
+   - VIETATE opzioni palesemente assurde, ironiche, trabocchetti sulla grammatica o domande sull'ordine/sequenza temporale della lezione ("Cosa è stato detto prima?", "Quale NON è stato menzionato per primo?").
+3. OMOGENEITÀ DELLE OPZIONI: Tutte e 4 le opzioni di risposta per ogni domanda devono avere lunghezza, complessità sintattica e registro linguistico simili, per evitare che l'opzione corretta sia riconoscibile solo perché più lunga o più dettagliata.
+4. OPZIONE CORRETTA INEQUIVOCABILE E ANTI-ALLUCINAZIONE: L'opzione corretta deve essere oggettivamente inconfutabile e dimostrabile esclusivamente in base a quanto espresso nella trascrizione della lezione.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
