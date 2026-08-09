@@ -49,6 +49,7 @@ interface Lecture {
   recorded_at: string
   created_at: string
   duration_seconds?: number | null
+  content_language?: 'it' | 'en' | null
 }
 
 interface AIJob {
@@ -210,6 +211,7 @@ export default function StudyHubPage() {
           generateSummary: jobType === 'summary',
           generateFlashcards: jobType === 'flashcards',
           generateQuiz: jobType === 'quiz',
+          contentLanguage: lecture.content_language || 'it',
         }),
       })
 
@@ -259,7 +261,7 @@ export default function StudyHubPage() {
       const { data: lectureData, error: lError } = await supabase
         .from('lectures')
         .select(`
-          id, title, status, transcript_text, recorded_at, created_at, course_id, duration_seconds,
+          id, title, status, transcript_text, recorded_at, created_at, course_id, duration_seconds, content_language,
           courses ( name )
         `)
         .eq('id', lectureId)
@@ -286,6 +288,7 @@ export default function StudyHubPage() {
         recorded_at: lectureData.recorded_at,
         created_at: lectureData.created_at,
         duration_seconds: (lectureData as any).duration_seconds,
+        content_language: (lectureData as any).content_language || 'it',
       })
 
       // Fetch AI jobs status

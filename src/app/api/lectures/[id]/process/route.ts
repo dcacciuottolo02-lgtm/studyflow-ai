@@ -719,7 +719,18 @@ export async function POST(
     let generateQuiz = body.generateQuiz
     let contentLanguage = body.contentLanguage
     if (contentLanguage !== 'it' && contentLanguage !== 'en') {
-      contentLanguage = 'it'
+      // Fetch existing content_language from lectures table to prevent resetting language on module regeneration
+      const { data: existingLec } = await supabase
+        .from('lectures')
+        .select('content_language')
+        .eq('id', lectureId)
+        .maybeSingle()
+
+      if (existingLec?.content_language === 'it' || existingLec?.content_language === 'en') {
+        contentLanguage = existingLec.content_language
+      } else {
+        contentLanguage = 'it'
+      }
     }
 
     const isIncremental =
