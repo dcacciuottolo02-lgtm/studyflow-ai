@@ -329,6 +329,7 @@ function RecordLectureContent() {
           status: 'uploading',
           duration_seconds: durationSecs > 0 ? durationSecs : null,
           recorded_at: new Date().toISOString(),
+          content_language: contentLanguage,
         })
         .select('id')
         .single()

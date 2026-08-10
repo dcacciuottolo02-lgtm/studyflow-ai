@@ -263,12 +263,18 @@ async function runNodePipeline(
   const shouldRunFlashcards = generateFlashcards && (!flashcardsJob || ['queued', 'failed', 'created'].includes(flashcardsJob.status))
   const shouldRunQuiz = generateQuiz && (!quizJob || ['queued', 'failed', 'created'].includes(quizJob.status))
 
-  const targetLangLabel = contentLanguage === 'it' ? 'Italian (italiano)' : 'English (inglese)'
+  let resolvedLang = contentLanguage === 'en' || contentLanguage === 'it' ? contentLanguage : 'it'
+  if (resolvedLang !== 'en') {
+    const { data: lecRow } = await supabase.from('lectures').select('content_language').eq('id', lectureId).maybeSingle()
+    if (lecRow?.content_language === 'en') {
+      resolvedLang = 'en'
+    }
+  }
 
   // 1. SUMMARY
   if (shouldRunSummary) {
     try {
-      console.log(`[AI Node Pipeline - Job 2] Generazione Riassunto...`)
+      console.log(`[AI Node Pipeline - Job 2] Generazione Riassunto... (Resolved Lang: ${resolvedLang})`)
       await supabase
         .from('ai_jobs')
         .update({ status: 'running', started_at: new Date().toISOString() })
@@ -280,20 +286,22 @@ async function runNodePipeline(
         properties: {
           content: {
             type: 'string',
-            description: `Detailed study summary formatted in Markdown, written entirely in ${targetLangLabel}.`,
+            description: `Detailed study summary formatted in Markdown, written entirely in ${resolvedLang === 'en' ? 'English' : 'Italian'}.`,
           },
           key_concepts: {
             type: 'array',
             items: {
               type: 'string',
-              description: `A key concept or term from the lecture, written entirely in ${targetLangLabel}.`,
+              description: `A key concept or term from the lecture, written entirely in ${resolvedLang === 'en' ? 'English' : 'Italian'}.`,
             },
           },
         },
         required: ['content', 'key_concepts'],
       }
 
-      const summaryPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di livello Elite specializzato nella creazione di Materiali di Studio Accademici Perfetti ed Esaustivi.
+      const summaryPrompt = `🔴 ATTENZIONE MASSIMA PRIORITÀ - LINGUA DI OUTPUT:
+TUTTO il contenuto generato (titoli, sezioni, spiegazioni, tabelle, definizioni, termini chiave e domande di autovalutazione) DEVE ESSERE SCRITTO ESCLUSIVAMENTE IN LINGUA ${resolvedLang === 'en' ? 'INGLESE (ENGLISH)' : 'ITALIANA (ITALIAN)'}.
+Se la trascrizione è in un'altra lingua, traduci fedelmente tutti i concetti e il testo generato in ${resolvedLang === 'en' ? 'Inglese' : 'Italiano'}.
 
 OBIETTIVO PRINCIPALE:
 Generare un documento di studio COMPLETO, DETTAGLIATO, STRUTTURATO ed ESTETICAMENTE PERFETTO in Markdown. Lo studente deve poter studiare e preparare l'esame leggendo questo riassunto, trovandovi spiegati in modo chiaro ed esaustivo TUTTI i concetti, le definizioni, le distinzioni, gli esempi e i passaggi concettuali presenti nella trascrizione, senza omissioni.
@@ -304,35 +312,62 @@ REGOLE FONDAMENTALI ANTI-ALLUCINAZIONE (REGOLA ASSOLUTA):
 3. TRASCRIZIONI INCOMPLETE O CORTE: Solo se la trascrizione fornita è palesemente breve, incompleta o si interrompe all'introduzione prima della spiegazione dei contenuti, prendine atto e dichiara con trasparenza la brevità del testo senza inventare le parti mancanti.
 
 REGOLE DI COMPLETEZZA E DETTAGLIO PEDAGOGICO (DIVIETO DI PIGRIZIA DI SINTESI):
-4. ADATTA LA LUNGHEZZA DEL RIASSUNTO ALLA RICCHEZZA DEL CONTENUTO ORIGINALE: Se la trascrizione è lunga e densa di dettagli, esempi numerici, calcoli, o passaggi logici, il riassunto deve essere proporzionalmente più lungo e dettagliato per non perdere queste informazioni. In particolare:
-   - Se il relatore fa un calcolo o un ragionamento passo-passo (es. 'con 10 clienti guadagni X, con 20 clienti guadagni Y, con 30...'), riporta l'intero ragionamento con i numeri specifici, non solo la conclusione finale.
-   - Se vengono menzionati esempi concreti multipli (es. una lista di categorie, professioni, o casi), elencali tutti, non un sottoinsieme rappresentativo.
-   - Se un concetto viene spiegato con un processo step-by-step (es. 'prima fai X, poi Y, poi Z'), riporta ogni passaggio nell'ordine corretto, non solo il concetto generale.
-   Non c'è un limite di lunghezza massima per il riassunto: meglio un riassunto più lungo ma completo, che uno corto ma che fa perdere allo studente dettagli che potrebbero essere richiesti all'esame.
-5. COMPLETEZZA E DETTAGLI CONCRETI: Il riassunto non deve essere una sintesi compressa, ma un documento di studio completo. Includi TUTTI gli esempi concreti, le analogie, i paragoni e i dettagli specifici che il relatore fornisce per illustrare ogni concetto (es. confronti di costo come annunci New York Times o spot Super Bowl, esempi di piattaforme o canali) - non limitarti a nominare il concetto, spiega esattamente come viene illustrato nel testo originale.
-6. DETTAGLIO NELLE SOTTOCATEGORIE: Quando un concetto viene scomposto in sotto-elementi (es. categorie dell'avatar, fasi del piano, vantaggi specifici), non limitarti a elencarli per nome. Spiega brevemente cosa include ciascuno, riportando i dettagli e gli esempi specifici forniti nella trascrizione (es. per la demografia: età, genere, reddito, occupazione; per la psicografia: valori, atteggiamenti, credenze, stile di vita).
-7. CITAZIONI DIRETTE RILEVANTI: Se il relatore usa una frase particolarmente efficace, incisiva o memorabile per riassumere un'idea chiave (es. "Customers don't buy when they understand; they buy when they feel understood"), includila nel riassunto tra virgolette ("..."), attribuendola chiaramente come citazione diretta dalla lezione.
-8. BILANCIAMENTO TRA COMPLETEZZA E ANTI-ALLUCINAZIONE: Questa richiesta di completezza ed esaustività si applica SOLO a contenuti realmente espressi nella trascrizione. Il modello deve essere esaustivo su tutto ciò che è stato realmente detto, senza omettere dettagli reali per pigrizia di sintesi, ma senza MAI inventare nulla di nuovo. La regola "non allucinare" resta assoluta, la nuova regola è "non omettere dettagli reali".
+4. ADATTA LA LUNGHEZZA DEL RIASSUNTO ALLA RICCHEZZA DEL CONTENUTO ORIGINALE: Se la trascrizione è lunga e densa di dettagli, esempi numerici, calcoli, o passaggi logici, il riassunto deve essere proporzionalmente più lungo e dettagliato per non perdere queste informazioni.
+5. COMPLETEZZA E DETTAGLI CONCRETI: Il riassunto non deve essere una sintesi compressa, ma un documento di studio completo. Includi TUTTI gli esempi concreti, le analogie, i paragoni e i dettagli specifici che il relatore fornisce per illustrare ogni concetto.
+6. DETTAGLIO NELLE SOTTOCATEGORIE: Quando un concetto viene scomposto in sotto-elementi, spiega brevemente cosa include ciascuno con i dettagli forniti nel testo.
+7. CITAZIONI DIRETTE RILEVANTI: Se il relatore usa una frase particolarmente efficace o memorabile, includila nel riassunto tra virgolette ("...").
+8. BILANCIAMENTO TRA COMPLETEZZA E ANTI-ALLUCINAZIONE: Esaustivo su tutto ciò che è stato réellement detto, senza inventare nulla di nuovo.
 
-STRUTTURA MARKDOWN RICHIESTA (RICCA ED ELEGANTE):
+STRUTTURA MARKDOWN RICHIESTA:
+${resolvedLang === 'en' ? `
+# 📌 [Clear Academic Title of the Lecture]
+
+## 📖 1. General Overview and Objectives
+[Context-rich introduction explaining the core theme of the lecture and theoretical/practical value]
+
+## 💡 2. In-Depth Analysis of Concepts and Theoretical Pillars
+[For each main topic or conceptual pillar:]
+### 🔹 [Concept/Module Name]
+- **Definition and Meaning**: [Detailed and clear explanation]
+- **Key Details and Functioning**: [Exhaustive breakdown of points and sub-elements]
+- **Concrete Examples and Comparisons**: [All practical examples and analogies from professor]
+- **Relevant Quotes**: ["..." (Direct quote if present)]
+
+## 📊 3. Conceptual Comparisons and Summary Charts
+[Markdown table comparing key concepts or advantages/disadvantages]
+
+## 🧠 4. Key Terms and Fundamental Definitions
+[Bullet list with technical terms, key definitions, and categorizations]
+
+## 🎯 Exam Focus and Self-Assessment
+[If the professor provided real exam guidance, list it distinctly]
+
+### Self-Assessment Questions
+Answer these open questions to test your understanding of the lecture:
+1. [Open question 1]
+2. [Open question 2]
+3. [Open question 3]
+4. [Open question 4]
+5. [Open question 5]
+` : `
 # 📌 [Titolo Accademico e Chiaro della Lezione]
 
 ## 📖 1. Panoramica Generale e Obiettivi della Lezione
-[Introduzione ricca di contesto che spiega il tema centrale della lezione e il valore teorico/pratico degli argomenti trattati]
+[Introduzione ricca di contesto che spiega il tema centrale della lezione e il valore teorico/pratico]
 
 ## 💡 2. Analisi Approfondita dei Concetti e Pilastri Teorici
 [Per ogni macro-argomento o pilastro concettuale spiegato dal docente:]
 ### 🔹 [Nome del Concetto/Modulo]
 - **Definizione e Significato**: [Spiegazione dettagliata e chiara]
-- **Funzionamento e Dettagli Chiave**: [Spiegazione esaustiva di tutti i punti, sotto-categorie o sotto-elementi spiegati nel testo]
-- **Esempi Concreti e Paragoni**: [Tutti gli esempi pratici, i confronti o le analogie citate dal docente per illustrare il concetto]
-- **Citazioni Rilevanti**: ["..." (Citazione diretta dal docente, se presente una frase incisiva nel testo)]
+- **Funzionamento e Dettagli Chiave**: [Spiegazione esaustiva di tutti i punti]
+- **Esempi Concreti e Paragoni**: [Tutti gli esempi pratici e le analogie]
+- **Citazioni Rilevanti**: ["..." (Citazione diretta dal docente)]
 
 ## 📊 3. Confronti Concettuali e Schemi Sintetici
-[Tabella Markdown o confronto schematico tra i concetti chiave o i vantaggi/svantaggi spiegati]
+[Tabella Markdown o confronto schematico tra i concetti chiave]
 
 ## 🧠 4. Termini e Definizioni Fondamentali
-[Elenco puntato con i termini tecnici, le definizioni chiave e le categorizzazioni da sapere per il ripasso, con i relativi dettagli descrittivi dal testo]
+[Elenco puntato con i termini tecnici, le definizioni chiave e le categorizzazioni]
 
 ## 🎯 Focus Esame e Autovalutazione
 [Se il professore ha fornito indicazioni reali sull'esame nella lezione, riportali qui distintamente]
@@ -344,13 +379,17 @@ Rispondi a queste domande per verificare la tua comprensione della lezione:
 3. [Domanda aperta 3]
 4. [Domanda aperta 4]
 5. [Domanda aperta 5]
+`}
 
 REGOLE TASSATIVE PER LA SEZIONE DOMANDE DI AUTOVALUTAZIONE:
 - Genera fino a 5 domande a RISPOSTA APERTA (NON a scelta multipla, NON a risposta chiusa).
-- NESSUNA risposta modello, soluzione o spiegazione guida deve essere inclusa nel riassunto. Lo studente deve rispondere e autovalutarsi da solo confrontandosi mentalmente con il riassunto.
-- Le domande devono testare la comprensione profonda (focus su "perché" e "come"), mai l'ordine di presentazione o la semplice memorizzazione di parole isolate.
-- Se la trascrizione è breve o incompleta, genera un numero minore di domande sensate (es. 2-3) piuttosto che forzare 5 domande su materiale insufficiente.
-- Ancoraggio rigoroso ai soli contenuti reali della trascrizione (regola anti-allucinazione).
+- NESSUNA risposta modello, soluzione o spiegazione guida deve essere inclusa. Lo studente deve rispondere e autovalutarsi da solo.
+- Le domande devono testare la comprensione profonda (focus su "perché" e "come").
+- Se la trascrizione è breve o incompleta, genera un numero minore di domande sensate (es. 2-3).
+- Ancoraggio rigoroso ai soli contenuti reali della trascrizione.
+
+🔴 DIRETTIVA FINALE ED INCONTROVERTIBILE SULLA LINGUA:
+Verifica prima di generare l'output che l'INTERO testo Markdown (titoli, sezioni, spiegazioni, tabelle, termini chiave, domande di autovalutazione) e l'array key_concepts siano SCRITTI AL 100% ESCLUSIVAMENTE IN LINGUA ${resolvedLang === 'en' ? 'INGLESE (ENGLISH)' : 'ITALIANA (ITALIAN)'}.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
@@ -370,27 +409,28 @@ Trascrizione:
         { jobLabel: 'Job 2 Summary', supabase, lectureId, jobType: 'summary' }
       )
 
-      const summaryJson = JSON.parse(sumResult.response.text())
-      const { data: existingSum } = await supabase
-        .from('summaries')
+      const sumJson = JSON.parse(sumResult.response.text())
+      const { data: existingSM } = await supabase
+        .from('study_materials')
         .select('id')
-        .eq('study_material_id', studyMaterialId)
+        .eq('lecture_id', lectureId)
         .maybeSingle()
 
-      if (existingSum) {
+      if (existingSM) {
         await supabase
-          .from('summaries')
+          .from('study_materials')
           .update({
-            content: summaryJson.content,
-            key_concepts: summaryJson.key_concepts,
-            version: 1,
+            summary_text: sumJson.content,
+            key_concepts: sumJson.key_concepts || [],
+            status: 'completed',
           })
-          .eq('id', existingSum.id)
+          .eq('id', existingSM.id)
       } else {
-        await supabase.from('summaries').insert({
-          study_material_id: studyMaterialId,
-          content: summaryJson.content,
-          key_concepts: summaryJson.key_concepts,
+        await supabase.from('study_materials').insert({
+          lecture_id: lectureId,
+          summary_text: sumJson.content,
+          key_concepts: sumJson.key_concepts || [],
+          status: 'completed',
         })
       }
 
@@ -416,7 +456,7 @@ Trascrizione:
   // 2. FLASHCARDS
   if (shouldRunFlashcards) {
     try {
-      console.log(`[AI Node Pipeline - Job 3] Generazione Flashcards...`)
+      console.log(`[AI Node Pipeline - Job 3] Generazione Flashcard... (Resolved Lang: ${resolvedLang})`)
       await supabase
         .from('ai_jobs')
         .update({ status: 'running', started_at: new Date().toISOString() })
@@ -433,11 +473,11 @@ Trascrizione:
               properties: {
                 question: {
                   type: 'string',
-                  description: `The study question written entirely in ${targetLangLabel}.`,
+                  description: `The study question written entirely in ${resolvedLang === 'en' ? 'English' : 'Italian'}.`,
                 },
                 answer: {
                   type: 'string',
-                  description: `The clear and concise answer written entirely in ${targetLangLabel}.`,
+                  description: `The clear and concise answer written entirely in ${resolvedLang === 'en' ? 'English' : 'Italian'}.`,
                 },
               },
               required: ['question', 'answer'],
@@ -447,21 +487,24 @@ Trascrizione:
         required: ['flashcards'],
       }
 
-      const flashcardsPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un assistente di studio universitario di alto livello specializzato in Active Recall e Spaced Repetition per la preparazione agli esami.
-IMPORTANTE: Genera tutte le domande e le risposte delle flashcard esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+      const flashcardsPrompt = `🔴 ATTENZIONE MASSIMA PRIORITÀ - LINGUA DI OUTPUT:
+TUTTE le domande (question) e tutte le risposte (answer) delle flashcard DEVONO ESSERE SCRITTE ESCLUSIVAMENTE IN LINGUA ${resolvedLang === 'en' ? 'INGLESE (ENGLISH)' : 'ITALIANA (ITALIAN)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
 
 Basandoti sulla trascrizione della lezione fornita, genera un set di 10-15 flashcard domanda/risposta ad ALTISSIMA QUALITÀ PEDAGOGICA ed EFFICACIA DI APPRENDIMENTO.
 
 REGOLE OBBLIGATORIE DI QUALITÀ E STRUTTURA INTELLIGENTE PER LE FLASHCARD:
 1. RILEVANZA E PROFONDITÀ ACCADEMICA: Ogni flashcard DEVE focalizzarsi su un concetto chiave, una definizione rigorosa, una distinzione cruciale o un meccanismo spiegato dal docente. Evita domande superficiali, banali o su dettagli irrilevanti.
 2. FORMULAZIONE INTELLIGENTE DELLE DOMANDE (FRONT CARD):
-   - Formula domande chiare, esplicite e contestualizzate che stimolino l'Active Recall (es. "In che modo [concetto X] influenza [risultato Y] secondo il docente?", "Qual è la differenza fondamentale tra [X] e [Y]?", "Quali sono i requisiti per applicare [principio]?").
-   - VIETATO creare domande vaghe o sull'ordine/sequenza di presentazione nel testo (es. "Qual è il primo elemento menzionato?", "In che ordine appaiono X e Y?").
+   - Formula domande chiare, esplicite e contestualizzate che stimolino l'Active Recall (es. "${resolvedLang === 'en' ? 'How does [Concept X] influence [Result Y]?' : 'In che modo [concetto X] influenza [risultato Y] secondo il docente?'}").
+   - VIETATO creare domande vaghe o sull'ordine/sequenza di presentazione nel testo.
 3. RISPOSTE RICCHE ED AUTO-ESPLICATIVE (BACK CARD):
-   - La risposta non deve mai essere una singola parola o frase mozza. Deve contenere la definizione precisa + la ragione concettuale o un esempio pratico tratto direttamente dalla lezione.
-   - Lo studente, girando la carta, deve poter capire e ripassare il concetto completo senza dover rileggere la trascrizione.
-4. COPERTURA COMPLETA DEI PILASTRI: Distribuisci le domande lungo tutti i macro-argomenti e sottocategorie trattati nella lezione, garantendo che ciascun pilastro concettuale sia testato individualmente.
-5. RIGOROSA ADERENZA ANTI-ALLUCINAZIONE: Ogni risposta deve basarsi esclusivamente sulle informazioni pronunciate o spiegate dal relatore nella trascrizione.
+   - La risposta deve contenere la definizione precisa + la ragione concettuale o un esempio pratico tratto dalla lezione.
+   - Lo studente deve poter ripassare il concetto completo senza dover rileggere la trascrizione.
+4. COPERTURA COMPLETA DEI PILASTRI: Distribuisci le domande lungo tutti i macro-argomenti e sottocategorie trattati.
+5. RIGOROSA ADERENZA ANTI-ALLUCINAZIONE: Ogni risposta deve basarsi esclusivamente sulle informazioni esplicite della trascrizione.
+
+🔴 DIRETTIVA FINALE SULLA LINGUA:
+Tutto il JSON delle flashcard (sia 'question' che 'answer') deve essere scritto interamente ed esclusivamente in lingua ${resolvedLang === 'en' ? 'INGLESE (ENGLISH)' : 'ITALIANA (ITALIAN)'}.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
@@ -534,7 +577,7 @@ Trascrizione:
   // 3. QUIZ
   if (shouldRunQuiz) {
     try {
-      console.log(`[AI Node Pipeline - Job 4] Generazione Quiz...`)
+      console.log(`[AI Node Pipeline - Job 4] Generazione Quiz... (Resolved Lang: ${resolvedLang})`)
       await supabase
         .from('ai_jobs')
         .update({ status: 'running', started_at: new Date().toISOString() })
@@ -551,13 +594,13 @@ Trascrizione:
               properties: {
                 question: {
                   type: 'string',
-                  description: `The quiz question written entirely in ${targetLangLabel}.`,
+                  description: `The quiz question written entirely in ${resolvedLang === 'en' ? 'English' : 'Italian'}.`,
                 },
                 options: {
                   type: 'array',
                   items: {
                     type: 'string',
-                    description: `Answer option written entirely in ${targetLangLabel}.`,
+                    description: `Answer option written entirely in ${resolvedLang === 'en' ? 'English' : 'Italian'}.`,
                   },
                 },
                 correct_option_index: { type: 'integer' },
@@ -569,8 +612,8 @@ Trascrizione:
         required: ['quiz'],
       }
 
-      const quizPrompt = `[OUTPUT LANGUAGE: ${contentLanguage.toUpperCase()}] - Sei un docimologo universitario ed esperto in valutazione dell'apprendimento di alto livello.
-IMPORTANTE: Genera tutte le domande e le opzioni di risposta del quiz esclusivamente in lingua ${contentLanguage === 'it' ? 'italiana (Italian)' : 'inglese (English)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
+      const quizPrompt = `🔴 ATTENZIONE MASSIMA PRIORITÀ - LINGUA DI OUTPUT:
+TUTTE le domande (question) e TUTTE le 4 opzioni di risposta (options) del quiz DEVONO ESSERE SCRITTE ESCLUSIVAMENTE IN LINGUA ${resolvedLang === 'en' ? 'INGLESE (ENGLISH)' : 'ITALIANA (ITALIAN)'}. Traduci i concetti spiegati nella trascrizione se la trascrizione originale è in un'altra lingua.
 
 Basandoti sulla trascrizione della lezione fornita, genera un set di 8-10 domande a risposta multipla ad ALTISSIMA PRECISIONE E VALORE EDUCATIVO. Ogni domanda deve avere esattamente 4 opzioni di risposta (da 0 a 3) e l'indice dell'opzione corretta.
 
@@ -578,12 +621,15 @@ REGOLE OBBLIGATORIE PER LA COSTRUZIONE INTELLIGENTE DEL QUIZ:
 1. BILANCIAMENTO SECONDO LA TASSONOMIA DI BLOOM:
    - 30% Domande di Comprensione / Definizioni Chiave: Testare il dominio della terminologia esatta e dei concetti base.
    - 40% Domande di Analisi & Causa-Effetto: Testare le relazioni di causa-effetto, le differenze critiche tra concetti o il "perché" di un principio.
-   - 30% Domande di Applicazione Pratica: Presentare un caso studio, uno scenario o un problema concreto basato sugli esempi del docente e chiedere di identificare la decisione/soluzione corretta.
+   - 30% Domande di Applicazione Pratica: Presentare un caso studio o problema concreto basato sugli esempi del docente.
 2. DISTRATTORI EDUCATIVI E INTELLIGENTI (LE 3 OPZIONI ERRATE):
-   - I distrattori DEVONO rappresentare i misconcetti tipici o gli errori di ragionamento che uno studente farebbe se avesse studiato in modo superficiale o compreso solo parzialmente la lezione.
-   - VIETATE opzioni palesemente assurde, ironiche, trabocchetti sulla grammatica o domande sull'ordine/sequenza temporale della lezione ("Cosa è stato detto prima?", "Quale NON è stato menzionato per primo?").
-3. OMOGENEITÀ DELLE OPZIONI: Tutte e 4 le opzioni di risposta per ogni domanda devono avere lunghezza, complessità sintattica e registro linguistico simili, per evitare che l'opzione corretta sia riconoscibile solo perché più lunga o più dettagliata.
-4. OPZIONE CORRETTA INEQUIVOCABILE E ANTI-ALLUCINAZIONE: L'opzione corretta deve essere oggettivamente inconfutabile e dimostrabile esclusivamente in base a quanto espresso nella trascrizione della lezione.
+   - I distrattori DEVONO rappresentare i misconcetti tipici o gli errori di ragionamento che uno studente farebbe se avesse studiato in modo superficiale.
+   - VIETATE opzioni palesemente assurde, ironiche, trabocchetti sulla grammatica o domande sull'ordine temporale della lezione.
+3. OMOGENEITÀ DELLE OPZIONI: Tutte e 4 le opzioni di risposta per ogni domanda devono avere lunghezza e complessità simili.
+4. OPZIONE CORRETTA INEQUIVOCABILE E ANTI-ALLUCINAZIONE: L'opzione corretta deve essere oggettivamente inconfutabile e dimostrabile esclusivamente in base alla trascrizione.
+
+🔴 DIRETTIVA FINALE SULLA LINGUA:
+Tutto il JSON del quiz (sia 'question' che 'options') deve essere scritto interamente ed esclusivamente in lingua ${resolvedLang === 'en' ? 'INGLESE (ENGLISH)' : 'ITALIANA (ITALIAN)'}.
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
