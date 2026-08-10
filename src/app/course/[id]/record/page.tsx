@@ -274,7 +274,7 @@ function RecordLectureContent() {
         (audioBuffer) => {
           const duration = Math.round(audioBuffer.duration)
           if (duration > 3600) {
-            setError(language === 'it' ? 'Il file audio supera il limite massimo di 1 ora (60 minuti).' : 'Audio file exceeds the maximum 1-hour limit.')
+            setError(language === 'it' ? 'Il file audio supera il limite massimo di 1 ora. Dividi la registrazione in blocchi più brevi.' : 'Audio file exceeds the maximum 1-hour limit. Please divide the recording into shorter chunks.')
             setSelectedFile(null)
             return
           }

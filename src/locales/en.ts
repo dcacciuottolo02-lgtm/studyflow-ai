@@ -227,7 +227,7 @@ const en: Record<TranslationKeys, any> = {
   "record.button.stopAndSave": "Stop and Save",
   "record.tooltip.cancel": "Cancel all",
   "record.upload.dragDrop": "Drag and drop your file here, or browse",
-  "record.upload.formats": "Supports MP3, M4A, WAV, WEBM formats (Max 150MB)",
+  "record.upload.formats": "Supports MP3, M4A, WAV, WEBM formats (Max 1 hour)",
   "record.upload.browse": "Browse files",
   "record.tooltip.removeFile": "Remove file",
   "record.button.startAI": "Start AI Analysis",

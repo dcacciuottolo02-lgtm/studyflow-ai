@@ -225,7 +225,7 @@ const it = {
   "record.button.stopAndSave": "Termina e Salva",
   "record.tooltip.cancel": "Annulla tutto",
   "record.upload.dragDrop": "Trascina il file qui oppure sfoglia",
-  "record.upload.formats": "Supporta formati MP3, M4A, WAV, WEBM (Max 150MB)",
+  "record.upload.formats": "Supporta formati MP3, M4A, WAV, WEBM (Max 1 ora)",
   "record.upload.browse": "Sfoglia file",
   "record.tooltip.removeFile": "Rimuovi file",
   "record.button.startAI": "Inizia Analisi AI",

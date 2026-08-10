@@ -330,9 +330,23 @@ STRUTTURA MARKDOWN RICHIESTA (RICCA ED ELEGANTE):
 ## 🧠 4. Termini e Definizioni Fondamentali
 [Elenco puntato con i termini tecnici, le definizioni chiave e le categorizzazioni da sapere per il ripasso, con i relativi dettagli descrittivi dal testo]
 
-## 🎯 5. Focus Esame e Quesiti di Autovalutazione
-- **Focus per l'Esame**: [Report di tutti i punti critici, concetti chiave, indicazioni ed elementi utili per la prova d'esame basati esclusivamente sui contenuti realmente espressi nella lezione]
-- **Quesiti di Autovalutazione a Risposta Aperta**: [Genera ESATTAMENTE 5 domande a risposta aperta stimolanti basate sulla lezione per verificare se lo studente ha compreso a fondo gli argomenti. Per ciascuna delle 5 domande, fornisci subito sotto una "Risposta guida / Spiegazione di confronto" per consentire allo studente l'autoverifica]. NOTA BENE: Le domande di autovalutazione sono uno strumento pedagogico creato per lo studio e NON vanno presentate come se il professore le avesse pronunciate nella lezione.
+## 🎯 Focus Esame e Autovalutazione
+[Se il professore ha fornito indicazioni reali sull'esame nella lezione, riportali qui distintamente]
+
+### Domande di Autovalutazione
+Rispondi a queste domande per verificare la tua comprensione della lezione:
+1. [Domanda aperta 1]
+2. [Domanda aperta 2]
+3. [Domanda aperta 3]
+4. [Domanda aperta 4]
+5. [Domanda aperta 5]
+
+REGOLE TASSATIVE PER LA SEZIONE DOMANDE DI AUTOVALUTAZIONE:
+- Genera fino a 5 domande a RISPOSTA APERTA (NON a scelta multipla, NON a risposta chiusa).
+- NESSUNA risposta modello, soluzione o spiegazione guida deve essere inclusa nel riassunto. Lo studente deve rispondere e autovalutarsi da solo confrontandosi mentalmente con il riassunto.
+- Le domande devono testare la comprensione profonda (focus su "perché" e "come"), mai l'ordine di presentazione o la semplice memorizzazione di parole isolate.
+- Se la trascrizione è breve o incompleta, genera un numero minore di domande sensate (es. 2-3) piuttosto che forzare 5 domande su materiale insufficiente.
+- Ancoraggio rigoroso ai soli contenuti reali della trascrizione (regola anti-allucinazione).
 
 Restituisci il risultato esclusivamente come oggetto JSON strutturato secondo lo schema.
 
