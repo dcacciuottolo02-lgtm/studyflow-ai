@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, useTransition } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { createClient } from '@/utils/supabase/client'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { exportToWord } from '@/utils/wordExport'
@@ -1087,6 +1088,7 @@ export default function StudyHubPage() {
                       </button>
                     </div>
                     <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
                       components={{
                         h2: ({ ...props }) => <h2 className="text-xl font-black text-slate-850 mt-6 mb-3 first:mt-0" {...props} />,
                         h3: ({ ...props }) => <h3 className="text-base font-extrabold text-slate-800 mt-4 mb-2" {...props} />,
@@ -1095,6 +1097,16 @@ export default function StudyHubPage() {
                         ol: ({ ...props }) => <ol className="list-decimal pl-5 mb-4 text-sm sm:text-base text-slate-650 space-y-1.5 font-medium" {...props} />,
                         li: ({ ...props }) => <li className="pl-0.5 leading-relaxed" {...props} />,
                         strong: ({ ...props }) => <strong className="font-extrabold text-indigo-950" {...props} />,
+                        table: ({ ...props }) => (
+                          <div className="overflow-x-auto my-6 rounded-2xl border border-slate-150 shadow-soft-sm bg-white">
+                            <table className="w-full border-collapse text-left text-xs sm:text-sm text-slate-700 min-w-[550px]" {...props} />
+                          </div>
+                        ),
+                        thead: ({ ...props }) => <thead className="bg-slate-50/90 border-b border-slate-200 text-slate-850 font-extrabold uppercase text-[11px] tracking-wider" {...props} />,
+                        tbody: ({ ...props }) => <tbody className="divide-y divide-slate-100 font-medium" {...props} />,
+                        tr: ({ ...props }) => <tr className="hover:bg-slate-50/60 transition-colors" {...props} />,
+                        th: ({ ...props }) => <th className="px-4 py-3 font-extrabold text-slate-900 border-b border-slate-200" {...props} />,
+                        td: ({ ...props }) => <td className="px-4 py-3 text-slate-650 leading-relaxed font-medium align-top" {...props} />,
                       }}
                     >
                       {summary.content}
