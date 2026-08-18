@@ -11,7 +11,6 @@ import { createClient } from '@/utils/supabase/client'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { exportToWord } from '@/utils/wordExport'
 import BottomNav from '@/components/BottomNav'
-import LectureWhiteboard, { WhiteboardData } from '@/components/LectureWhiteboard'
 import {
   ArrowLeft,
   RefreshCw,
@@ -136,7 +135,7 @@ export default function StudyHubPage() {
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([])
   
   // Navigation & loaders state
-  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript'>('summary')
+  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript' | 'notes'>('summary')
   const [userPlan, setUserPlan] = useState<'free' | 'pro'>('free')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -605,12 +604,7 @@ export default function StudyHubPage() {
     setCurrentQuizWizardStep(0)
   }
 
-  // Handle debounced auto-save for User Personal Notes & Whiteboard
-  const handleSaveWhiteboard = (data: WhiteboardData) => {
-    const serialized = JSON.stringify(data)
-    handleUserNoteChange(serialized)
-  }
-
+  // Handle debounced auto-save for User Personal Notes
   const handleUserNoteChange = (newContent: string) => {
     setUserNote(newContent)
     setIsNoteSaved(false)
@@ -649,21 +643,33 @@ export default function StudyHubPage() {
     }, 800)
   }
 
-  const handleDownloadNotesWord = async (customText?: string) => {
-    let noteText = customText || userNote || ''
-    if (noteText.trim().startsWith('{') && noteText.includes('"text"')) {
-      try {
-        const parsed = JSON.parse(noteText)
-        noteText = parsed.text || ''
-      } catch {}
-    }
-    if (!lecture || !noteText.trim()) return
+  const handleInsertTimestamp = () => {
+    const timeSecs = audioRef.current?.currentTime || currentTime || 0
+    const m = Math.floor(timeSecs / 60)
+    const s = Math.floor(timeSecs % 60)
+    const formattedStamp = `\n⏱️ [${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}] `
+    handleUserNoteChange(userNote + formattedStamp)
+  }
+
+  const handleDownloadNotes = () => {
+    const blob = new Blob([userNote], { type: 'text/markdown;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `${lecture?.title || 'Lezione'}_Note.md`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleDownloadNotesWord = async () => {
+    if (!lecture || !userNote.trim()) return
     const formattedDate = formatLectureDate(lecture.recorded_at, lecture.created_at)
     await exportToWord({
       title: lecture.title || 'Lezione',
       courseName: lecture.course_name || 'Corso',
       date: formattedDate,
-      content: noteText,
+      content: userNote,
       type: 'notes',
     })
   }
@@ -933,21 +939,6 @@ export default function StudyHubPage() {
               </div>
             )}
 
-            {/* Whiteboard & Smart Scratchpad */}
-            {lecture && (
-              <LectureWhiteboard
-                initialContent={userNote}
-                lectureTitle={lecture.title}
-                courseName={lecture.course_name}
-                recordedDate={formatLectureDate(lecture.recorded_at, lecture.created_at)}
-                currentAudioTime={audioRef.current?.currentTime || currentTime || 0}
-                onSave={handleSaveWhiteboard}
-                isSaving={isNoteSaving}
-                isSaved={isNoteSaved}
-                onExportWord={handleDownloadNotesWord}
-              />
-            )}
-
           </div>
 
           {/* Main Column: Tabs & Tab content (2 cols on lg) */}
@@ -1044,6 +1035,7 @@ export default function StudyHubPage() {
                 { id: 'flashcards', label: t('hub.tabs.flashcards'), icon: BookOpen },
                 { id: 'quiz', label: t('hub.tabs.quiz'), icon: HelpCircle },
                 { id: 'transcript', label: t('hub.tabs.transcript'), icon: HelpIcon },
+                { id: 'notes', label: 'Note', icon: Edit3 },
               ].map((tab) => {
                 const Icon = tab.icon
                 const active = activeTab === tab.id
@@ -1577,6 +1569,73 @@ export default function StudyHubPage() {
                   {t('hub.transcript.noContent')}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 5: USER PERSONAL NOTES */}
+          {activeTab === 'notes' && (
+            <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-3xl shadow-soft-md text-left flex flex-col gap-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-650">
+                    <Edit3 className="w-4 h-4" />
+                  </div>
+                  <div className="flex flex-col">
+                    <h3 className="font-extrabold text-sm text-slate-850">
+                      Note Personali dello Studente
+                    </h3>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {isNoteSaving ? '⏳ Salvataggio in corso...' : isNoteSaved ? '🟢 Salvato nel tuo account' : '⚪ Modifiche non salvate'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleInsertTimestamp}
+                    className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer"
+                    title="Inserisci timestamp dell'audio al punto riprodotto"
+                  >
+                    <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>+ Timestamp</span>
+                  </button>
+
+                  {userNote.trim() && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleDownloadNotes}
+                        className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold px-3 py-2 rounded-xl text-xs transition-all cursor-pointer"
+                        title="Scarica i tuoi appunti in formato Markdown"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Markdown (.md)</span>
+                      </button>
+
+                      <button
+                        onClick={handleDownloadNotesWord}
+                        className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs transition-all cursor-pointer shadow-md shadow-indigo-100"
+                        title="Scarica i tuoi appunti in formato Microsoft Word (.docx)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Esporta Word (.docx)</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <textarea
+                  value={userNote}
+                  onChange={(e) => handleUserNoteChange(e.target.value)}
+                  placeholder="Scrivi qui i tuoi appunti e le tue riflessioni personali sulla lezione... Puoi usare il pulsante '+ Timestamp' per ancorare le note ai minuti esatti dell'audio."
+                  className="w-full min-h-[360px] p-4 text-xs sm:text-sm font-medium text-slate-800 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-indigo-500 focus:bg-white transition-all leading-relaxed resize-y shadow-inner"
+                />
+                <div className="flex justify-between items-center text-[10px] text-slate-400 font-semibold px-1">
+                  <span>{userNote.length} caratteri</span>
+                  <span>Salvataggio automatico istantaneo nel cloud</span>
+                </div>
+              </div>
             </div>
           )}
         </div>
