@@ -6,7 +6,12 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
-import { getOrCreateUserStats, UserStudyStats } from '@/utils/studyStats'
+import {
+  getOrCreateUserStats,
+  buildMultiCourseTodayQueue,
+  UserStudyStats,
+  TodayTaskItem,
+} from '@/utils/studyStats'
 import CourseModal from '@/components/CourseModal'
 import BottomNav from '@/components/BottomNav'
 import {
@@ -24,6 +29,8 @@ import {
   Mic,
   Award,
   Zap,
+  Filter,
+  Layers,
 } from 'lucide-react'
 import { useLanguage } from '@/contexts/LanguageContext'
 
@@ -36,18 +43,6 @@ interface Course {
   lectures?: { id: string; deleted_at: string | null }[]
 }
 
-interface TodayQueueItem {
-  lectureId: string
-  lectureTitle: string
-  courseId: string
-  courseName: string
-  courseColor: string
-  recordedAt: string
-  hasSummary: boolean
-  flashcardsCount: number
-  hasQuiz: boolean
-}
-
 export default function HomePage() {
   const router = useRouter()
   const { t, language } = useLanguage()
@@ -58,7 +53,13 @@ export default function HomePage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [greeting, setGreeting] = useState('home.greeting.welcome')
 
-  // Academic stats & Today action queue state
+  // Multi-Course Filter & Academic Study Queue
+  const [selectedCourseFilter, setSelectedCourseFilter] = useState<string>('all')
+  const [queueItems, setQueueItems] = useState<TodayTaskItem[]>([])
+  const [weakCardsCount, setWeakCardsCount] = useState<number>(0)
+  const [weakLectureId, setWeakLectureId] = useState<string | null>(null)
+
+  // Academic stats state
   const [stats, setStats] = useState<UserStudyStats>({
     user_id: '',
     current_streak: 1,
@@ -70,9 +71,6 @@ export default function HomePage() {
     total_quizzes_completed: 0,
     total_study_minutes: 0,
   })
-  const [todayQueue, setTodayQueue] = useState<TodayQueueItem | null>(null)
-  const [weakCardsCount, setWeakCardsCount] = useState<number>(0)
-  const [weakLectureId, setWeakLectureId] = useState<string | null>(null)
 
   // Set greeting based on local client time
   useEffect(() => {
@@ -167,61 +165,47 @@ export default function HomePage() {
           .is('deleted_at', null)
           .is('courses.deleted_at', null)
           .order('created_at', { ascending: false })
-          .limit(10)
+          .limit(12)
 
         if (lecturesData && lecturesData.length > 0) {
           setRecentLectures(lecturesData.slice(0, 5))
 
-          // 7. Calculate "Today Queue" item (most recent ready/completed lecture)
-          const primeLecture = lecturesData.find((l) =>
-            ['completed', 'ready', 'uploaded'].includes(l.status)
-          )
+          // 7. Load study materials across lectures to feed the Ebbinghaus algorithm
+          const lectureIds = lecturesData.map((l) => l.id)
+          const { data: smList } = await supabase
+            .from('study_materials')
+            .select(`
+              id,
+              lecture_id,
+              summaries(id),
+              flashcard_sets(id, flashcards(id, status)),
+              quiz_sets(id, quiz_questions(id))
+            `)
+            .in('lecture_id', lectureIds)
 
-          if (primeLecture) {
-            // Check study materials (flashcards count & summaries)
-            const { data: sm } = await supabase
-              .from('study_materials')
-              .select(`
-                id,
-                summaries(id),
-                flashcard_sets(id, flashcards(id, status)),
-                quiz_sets(id, quiz_questions(id))
-              `)
-              .eq('lecture_id', primeLecture.id)
-              .maybeSingle()
+          const smMap: Record<string, any> = {}
+          smList?.forEach((sm) => {
+            smMap[sm.lecture_id] = sm
+          })
 
-            const flashcardsList = (sm?.flashcard_sets?.[0]?.flashcards as any[]) || []
-            const quizzesList = (sm?.quiz_sets?.[0]?.quiz_questions as any[]) || []
-            const courseInfo = (Array.isArray(primeLecture.courses) ? primeLecture.courses[0] : primeLecture.courses) as any || {}
+          // Calculate Multi-Course Ebbinghaus Priority Queue
+          const calculatedQueue = buildMultiCourseTodayQueue(lecturesData, smMap)
+          setQueueItems(calculatedQueue)
 
-            setTodayQueue({
-              lectureId: primeLecture.id,
-              lectureTitle: primeLecture.title || 'Lezione Recente',
-              courseId: courseInfo.id || primeLecture.course_id,
-              courseName: courseInfo.name || 'Corso',
-              courseColor: courseInfo.color || '#6366f1',
-              recordedAt: primeLecture.recorded_at || primeLecture.created_at,
-              hasSummary: Boolean(sm?.summaries && sm.summaries.length > 0),
-              flashcardsCount: flashcardsList.length,
-              hasQuiz: quizzesList.length > 0,
+          // 8. Find weak flashcards count
+          const totalUnknown = smList?.reduce((acc, sm) => {
+            const fcs = (sm.flashcard_sets?.[0]?.flashcards as any[]) || []
+            return acc + fcs.filter((fc) => fc.status === 'unknown').length
+          }, 0) || 0
+
+          if (totalUnknown > 0) {
+            setWeakCardsCount(totalUnknown)
+            const firstWeakSm = smList?.find((sm) => {
+              const fcs = (sm.flashcard_sets?.[0]?.flashcards as any[]) || []
+              return fcs.some((fc) => fc.status === 'unknown')
             })
-          }
-
-          // 8. Find weak flashcards across active courses
-          const courseIds = (coursesData || []).map((c: any) => c.id)
-          if (courseIds.length > 0) {
-            const { data: weakCards } = await supabase
-              .from('flashcards')
-              .select('id, flashcard_sets!inner(study_materials!inner(lecture_id))')
-              .eq('status', 'unknown')
-              .limit(10)
-
-            if (weakCards && weakCards.length > 0) {
-              setWeakCardsCount(weakCards.length)
-              const firstLectureId = (weakCards[0] as any)?.flashcard_sets?.study_materials?.lecture_id
-              if (firstLectureId) {
-                setWeakLectureId(firstLectureId)
-              }
+            if (firstWeakSm) {
+              setWeakLectureId(firstWeakSm.lecture_id)
             }
           }
         }
@@ -241,6 +225,13 @@ export default function HomePage() {
     100,
     Math.round(((stats.completed_today_count || 0) / (stats.daily_goal_target || 3)) * 100)
   )
+
+  // Filter queue by course
+  const displayedQueue = selectedCourseFilter === 'all'
+    ? queueItems.slice(0, 4) // Show top 4 across all courses
+    : queueItems.filter((item) => item.courseId === selectedCourseFilter)
+
+  const totalMinutesToday = displayedQueue.reduce((acc, q) => acc + q.estimatedMinutes, 0)
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 transition-colors duration-300">
@@ -333,119 +324,150 @@ export default function HomePage() {
         {/* Responsive Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
-          {/* Main Column: Action Queue & Courses Feed (2 cols on lg) */}
+          {/* Main Column: Multi-Course Action Queue & Feeds (2 cols on lg) */}
           <div className="lg:col-span-2 flex flex-col gap-8">
             
-            {/* --- PILASTRO 1 HERO: COSA STUDIARE OGGI (Daily Action Queue) --- */}
+            {/* --- PILASTRO 1: COSA STUDIARE OGGI (MULTI-CORSO) --- */}
             <div className="flex flex-col gap-4 text-left">
-              <div className="flex items-center justify-between pl-0.5">
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pl-0.5">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-indigo-600" />
                   <h2 className="text-xs font-black text-slate-900 uppercase tracking-widest">
                     {t('home.today.queue.title')}
                   </h2>
                 </div>
-                <span className="text-[10px] font-bold text-slate-400">
-                  Priorità di oggi
-                </span>
+                {totalMinutesToday > 0 && (
+                  <span className="text-[11px] font-extrabold text-indigo-600 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>~{totalMinutesToday} min stimati per oggi</span>
+                  </span>
+                )}
               </div>
 
-              {todayQueue ? (
-                <div className="bg-gradient-to-br from-indigo-900 via-slate-900 to-indigo-950 text-white rounded-3xl p-6 sm:p-7 shadow-xl shadow-indigo-950/15 relative overflow-hidden flex flex-col gap-6">
-                  
-                  {/* Decorative background glow */}
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
-                  
-                  {/* Queue Card Header */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-xs shadow-md shrink-0 border border-white/20"
-                        style={{ backgroundColor: todayQueue.courseColor }}
+              {/* Course Filter Pills */}
+              {courses.length > 1 && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  <button
+                    onClick={() => setSelectedCourseFilter('all')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shrink-0 ${
+                      selectedCourseFilter === 'all'
+                        ? 'bg-slate-900 text-white shadow-xs'
+                        : 'bg-white border border-slate-200/80 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    ✨ Tutti i Corsi ({queueItems.length})
+                  </button>
+                  {courses.map((course) => {
+                    const countForCourse = queueItems.filter((q) => q.courseId === course.id).length
+                    const isSelected = selectedCourseFilter === course.id
+                    return (
+                      <button
+                        key={course.id}
+                        onClick={() => setSelectedCourseFilter(course.id)}
+                        className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer shrink-0 border ${
+                          isSelected
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-xs'
+                            : 'bg-white border-slate-200/80 text-slate-600 hover:border-slate-300'
+                        }`}
                       >
-                        {todayQueue.courseName.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div className="flex flex-col text-left">
-                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-300">
-                          {todayQueue.courseName} • {t('home.today.queue.consolidate')}
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: course.color }}
+                        />
+                        <span className="truncate max-w-[130px]">{course.name}</span>
+                        {countForCourse > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-700 font-bold">
+                            {countForCourse}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Priority Queue Cards List */}
+              {displayedQueue.length > 0 ? (
+                <div className="flex flex-col gap-4">
+                  {displayedQueue.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="bg-white border border-slate-100 rounded-3xl p-5 sm:p-6 shadow-soft-sm hover:border-slate-200 transition-all duration-200 flex flex-col gap-4 text-left relative overflow-hidden"
+                    >
+                      {/* Top Row: Course badge & Urgency status */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: item.courseColor }}
+                          />
+                          <span className="text-xs font-black text-slate-850 uppercase tracking-wider">
+                            {item.courseName}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-extrabold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100/60">
+                          {item.urgencyReason}
                         </span>
-                        <h3 className="text-base sm:text-lg font-black text-white truncate max-w-md mt-0.5">
-                          {todayQueue.lectureTitle}
-                        </h3>
                       </div>
+
+                      {/* Middle Row: Lecture Title */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <h3 className="font-black text-sm sm:text-base text-slate-900">
+                            {item.lectureTitle}
+                          </h3>
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            Tempo consigliato: ~{item.estimatedMinutes} minuti
+                          </span>
+                        </div>
+
+                        {/* CTA Link */}
+                        <Link
+                          href={`/lecture/${item.lectureId}?tab=${item.targetTab}`}
+                          className="inline-flex items-center justify-center gap-2 bg-brand-gradient hover:opacity-95 text-white font-extrabold px-4.5 py-2.5 rounded-2xl text-xs shadow-md shadow-indigo-50 transition-all cursor-pointer hover:scale-105 shrink-0 self-start sm:self-auto"
+                        >
+                          <span>{t('home.today.queue.startSession')}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
+                      </div>
+
+                      {/* Bottom Action Checklist Pill */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-50 text-xs text-slate-500 font-medium">
+                        {item.hasSummary && (
+                          <Link
+                            href={`/lecture/${item.lectureId}?tab=summary`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 hover:bg-slate-100 rounded-xl text-[11px] font-bold text-slate-700 transition-colors"
+                          >
+                            <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>1. Riassunto</span>
+                          </Link>
+                        )}
+                        {item.flashcardsCount > 0 && (
+                          <Link
+                            href={`/lecture/${item.lectureId}?tab=flashcards`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 hover:bg-slate-100 rounded-xl text-[11px] font-bold text-slate-700 transition-colors"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>2. {item.flashcardsCount} Flashcard</span>
+                          </Link>
+                        )}
+                        {item.hasQuiz && (
+                          <Link
+                            href={`/lecture/${item.lectureId}?tab=quiz`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 hover:bg-slate-100 rounded-xl text-[11px] font-bold text-slate-700 transition-colors"
+                          >
+                            <HelpCircle className="w-3.5 h-3.5 text-amber-500" />
+                            <span>3. Mini-Quiz</span>
+                          </Link>
+                        )}
+                      </div>
+
                     </div>
-
-                    <Link
-                      href={`/lecture/${todayQueue.lectureId}`}
-                      className="inline-flex items-center justify-center gap-2 bg-white hover:bg-slate-100 text-slate-950 font-black px-5 py-2.5 rounded-2xl text-xs shadow-md transition-all duration-200 cursor-pointer hover:scale-105 shrink-0 self-start sm:self-auto"
-                    >
-                      <span>{t('home.today.queue.startSession')}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-
-                  {/* 3 Step Actionable Checklist */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-10">
-                    
-                    {/* Action 1: Summary */}
-                    <Link
-                      href={`/lecture/${todayQueue.lectureId}?tab=summary`}
-                      className="bg-white/10 hover:bg-white/15 border border-white/10 p-3.5 rounded-2xl flex items-center gap-3 transition-all cursor-pointer group"
-                    >
-                      <div className="w-8 h-8 rounded-xl bg-indigo-400/20 flex items-center justify-center text-indigo-300 shrink-0">
-                        <BookOpen className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                      </div>
-                      <div className="flex flex-col text-left overflow-hidden">
-                        <span className="text-[11px] font-extrabold text-white truncate">
-                          1. Riassunto
-                        </span>
-                        <span className="text-[10px] text-indigo-200 font-medium">
-                          6 min stimati
-                        </span>
-                      </div>
-                    </Link>
-
-                    {/* Action 2: Flashcards */}
-                    <Link
-                      href={`/lecture/${todayQueue.lectureId}?tab=flashcards`}
-                      className="bg-white/10 hover:bg-white/15 border border-white/10 p-3.5 rounded-2xl flex items-center gap-3 transition-all cursor-pointer group"
-                    >
-                      <div className="w-8 h-8 rounded-xl bg-emerald-400/20 flex items-center justify-center text-emerald-300 shrink-0">
-                        <Zap className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                      </div>
-                      <div className="flex flex-col text-left overflow-hidden">
-                        <span className="text-[11px] font-extrabold text-white truncate">
-                          2. {todayQueue.flashcardsCount} Flashcard
-                        </span>
-                        <span className="text-[10px] text-emerald-200 font-medium">
-                          Ripasso attivo
-                        </span>
-                      </div>
-                    </Link>
-
-                    {/* Action 3: Quiz */}
-                    <Link
-                      href={`/lecture/${todayQueue.lectureId}?tab=quiz`}
-                      className="bg-white/10 hover:bg-white/15 border border-white/10 p-3.5 rounded-2xl flex items-center gap-3 transition-all cursor-pointer group"
-                    >
-                      <div className="w-8 h-8 rounded-xl bg-amber-400/20 flex items-center justify-center text-amber-300 shrink-0">
-                        <HelpCircle className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                      </div>
-                      <div className="flex flex-col text-left overflow-hidden">
-                        <span className="text-[11px] font-extrabold text-white truncate">
-                          3. Mini-Quiz
-                        </span>
-                        <span className="text-[10px] text-amber-200 font-medium">
-                          Autovalutazione
-                        </span>
-                      </div>
-                    </Link>
-
-                  </div>
-
+                  ))}
                 </div>
               ) : (
-                /* All Done State */
+                /* All Caught Up Card */
                 <div className="bg-white border border-slate-100 p-8 rounded-3xl text-left flex items-start gap-4 shadow-soft-sm">
                   <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
                     <CheckCircle2 className="w-6 h-6" />
@@ -460,6 +482,7 @@ export default function HomePage() {
                   </div>
                 </div>
               )}
+
             </div>
 
             {/* --- WEAK CONCEPTS ALERT (IF ANY) --- */}

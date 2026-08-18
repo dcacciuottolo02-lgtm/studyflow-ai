@@ -24,6 +24,11 @@ import {
   FileAudio,
   Sparkles,
   X,
+  Target,
+  Award,
+  Zap,
+  CheckCircle2,
+  Flame,
 } from 'lucide-react'
 
 interface Course {
@@ -51,6 +56,13 @@ export default function CourseDetailPage() {
 
   const [course, setCourse] = useState<Course | null>(null)
   const [lectures, setLectures] = useState<Lecture[]>([])
+  const [masteryStats, setMasteryStats] = useState({
+    totalCards: 0,
+    knownCards: 0,
+    unknownCards: 0,
+    totalQuizzes: 0,
+    completedLectures: 0,
+  })
   const [loading, setLoading] = useState(true)
   const [showDropdown, setShowDropdown] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
@@ -99,9 +111,49 @@ export default function CourseDetailPage() {
 
       if (lecturesData) {
         setLectures(lecturesData)
+
+        // 3. Fetch study materials to calculate course mastery
+        const lectureIds = lecturesData.map((l) => l.id)
+        if (lectureIds.length > 0) {
+          const { data: smData } = await supabase
+            .from('study_materials')
+            .select(`
+              id,
+              lecture_id,
+              flashcard_sets(id, flashcards(id, status)),
+              quiz_sets(id, quiz_questions(id))
+            `)
+            .in('lecture_id', lectureIds)
+
+          if (smData) {
+            let knownCount = 0
+            let unknownCount = 0
+            let totalCards = 0
+            let totalQuizzes = 0
+
+            smData.forEach((sm) => {
+              const fcs = (sm.flashcard_sets?.[0]?.flashcards as any[]) || []
+              totalCards += fcs.length
+              knownCount += fcs.filter((fc) => fc.status === 'known').length
+              unknownCount += fcs.filter((fc) => fc.status === 'unknown').length
+              const qqs = (sm.quiz_sets?.[0]?.quiz_questions as any[]) || []
+              totalQuizzes += qqs.length
+            })
+
+            const completedLecs = lecturesData.filter((l) => l.status === 'completed').length
+
+            setMasteryStats({
+              totalCards,
+              knownCards: knownCount,
+              unknownCards: unknownCount,
+              totalQuizzes,
+              completedLectures: completedLecs,
+            })
+          }
+        }
       }
 
-      // 3. Fetch monthly usage limit status
+      // 4. Fetch monthly usage limit status
       const usageStatus = await checkUsageStatus()
       setUsage(usageStatus)
     } catch {
@@ -530,6 +582,71 @@ export default function CourseDetailPage() {
                     <span>{t('course.studyDuration', { duration: formatDuration(totalDuration) })}</span>
                   </span>
                 )}
+              </div>
+            </div>
+
+            {/* Course Academic Mastery Card */}
+            <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-500" />
+                  <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest pl-0.5">
+                    Padronanza Materia
+                  </h3>
+                </div>
+                <span className="text-xs font-black text-indigo-650">
+                  {masteryStats.totalCards > 0
+                    ? `${Math.round((masteryStats.knownCards / masteryStats.totalCards) * 100)}%`
+                    : masteryStats.completedLectures > 0 ? '50%' : '0%'}
+                </span>
+              </div>
+
+              {/* Progress bar */}
+              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                <div
+                  className="bg-brand-gradient h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${
+                      masteryStats.totalCards > 0
+                        ? Math.round((masteryStats.knownCards / masteryStats.totalCards) * 100)
+                        : masteryStats.completedLectures > 0 ? 50 : 0
+                    }%`,
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2.5 pt-2 text-xs font-semibold text-slate-600">
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-1.5 text-slate-500">
+                    <Zap className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Flashcard Conosciute</span>
+                  </span>
+                  <span className="font-extrabold text-slate-900">
+                    {masteryStats.knownCards}/{masteryStats.totalCards}
+                  </span>
+                </div>
+
+                {masteryStats.unknownCards > 0 && (
+                  <div className="flex justify-between items-center text-amber-700 bg-amber-50/70 p-2 rounded-xl border border-amber-200/60">
+                    <span className="flex items-center gap-1.5 text-[11px] font-bold">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Punti Critici da Rivedere</span>
+                    </span>
+                    <span className="font-extrabold text-xs">
+                      {masteryStats.unknownCards}
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center border-t border-slate-50 pt-2">
+                  <span className="flex items-center gap-1.5 text-slate-500">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" />
+                    <span>Lezioni Pronte</span>
+                  </span>
+                  <span className="font-extrabold text-slate-900">
+                    {masteryStats.completedLectures}/{lectures.length}
+                  </span>
+                </div>
               </div>
             </div>
 
