@@ -3,13 +3,14 @@
 'use client'
 
 import { useState, useEffect, useRef, useTransition } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { createClient } from '@/utils/supabase/client'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { exportToWord } from '@/utils/wordExport'
+import { recordStudyActivity } from '@/utils/studyStats'
 import BottomNav from '@/components/BottomNav'
 import {
   ArrowLeft,
@@ -124,6 +125,7 @@ export default function StudyHubPage() {
   const { t, language } = useLanguage()
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const lectureId = params.id as string
   const [isPending, startTransition] = useTransition()
 
@@ -135,7 +137,9 @@ export default function StudyHubPage() {
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([])
   
   // Navigation & loaders state
-  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript' | 'notes'>('summary')
+  const initialTabParam = searchParams.get('tab')
+  const validTab = (['summary', 'flashcards', 'quiz', 'transcript', 'notes'].includes(initialTabParam || '') ? initialTabParam : 'summary') as 'summary' | 'flashcards' | 'quiz' | 'transcript' | 'notes'
+  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'transcript' | 'notes'>(validTab)
   const [userPlan, setUserPlan] = useState<'free' | 'pro'>('free')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -570,6 +574,16 @@ export default function StudyHubPage() {
 
     try {
       const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        recordStudyActivity(supabase, user.id, 'flashcard', 1).catch((err) =>
+          console.error('[StudyStats Flashcard Record Error]:', err)
+        )
+      }
+
       const { error: fcUpdateError } = await supabase
         .from('flashcards')
         .update({ status: newStatus })
@@ -582,7 +596,7 @@ export default function StudyHubPage() {
   }
 
   // Submit Interactive Quiz
-  const handleSubmitQuiz = () => {
+  const handleSubmitQuiz = async () => {
     if (quizQuestions.length === 0) return
 
     let score = 0
@@ -594,6 +608,21 @@ export default function StudyHubPage() {
 
     setQuizScore(score)
     setIsQuizSubmitted(true)
+
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        recordStudyActivity(supabase, user.id, 'quiz', quizQuestions.length).catch((err) =>
+          console.error('[StudyStats Quiz Record Error]:', err)
+        )
+      }
+    } catch (err) {
+      console.error('[StudyStats Quiz Catch Error]:', err)
+    }
   }
 
   const handleResetQuiz = () => {
