@@ -12,7 +12,7 @@ import {
   UserStudyStats,
   TodayTaskItem,
 } from '@/utils/studyStats'
-import CourseModal from '@/components/CourseModal'
+import CourseModal, { ScheduleItem, SyllabusTopic } from '@/components/CourseModal'
 import BottomNav from '@/components/BottomNav'
 import {
   Plus,
@@ -29,8 +29,7 @@ import {
   Mic,
   Award,
   Zap,
-  Filter,
-  Layers,
+  Calendar,
 } from 'lucide-react'
 import { useLanguage } from '@/contexts/LanguageContext'
 
@@ -40,6 +39,10 @@ interface Course {
   professor: string | null
   color: string
   created_at: string
+  exam_date?: string | null
+  cfu?: number | null
+  schedule?: ScheduleItem[]
+  syllabus_topics?: SyllabusTopic[]
   lectures?: { id: string; deleted_at: string | null }[]
 }
 
@@ -47,6 +50,7 @@ export default function HomePage() {
   const router = useRouter()
   const { t, language } = useLanguage()
   const [courses, setCourses] = useState<Course[]>([])
+  const [todayClasses, setTodayClasses] = useState<{ course: Course; item: ScheduleItem }[]>([])
   const [studentName, setStudentName] = useState('Studente')
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -142,7 +146,7 @@ export default function HomePage() {
         const { data: coursesData } = await supabase
           .from('courses')
           .select(`
-            id, name, professor, color, created_at,
+            id, name, professor, color, created_at, exam_date, cfu, schedule, syllabus_topics,
             lectures:lectures(id, deleted_at)
           `)
           .eq('workspace_id', workspace.id)
@@ -151,6 +155,23 @@ export default function HomePage() {
 
         if (coursesData) {
           setCourses(coursesData as any[])
+
+          // Check if any course has a class scheduled for today
+          const dayKeys: ScheduleItem['day'][] = [
+            'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'
+          ]
+          const currentDayKey = dayKeys[new Date().getDay()]
+
+          const scheduledToday: { course: Course; item: ScheduleItem }[] = []
+          coursesData.forEach((course: any) => {
+            const schedList = (course.schedule as ScheduleItem[]) || []
+            schedList.forEach((item) => {
+              if (item.day === currentDayKey) {
+                scheduledToday.push({ course, item })
+              }
+            })
+          })
+          setTodayClasses(scheduledToday)
         }
 
         // 6. Fetch recent lectures across all courses in workspace
@@ -317,6 +338,33 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        {/* In-Class Today Smart Banner */}
+        {todayClasses.length > 0 && (
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl shadow-indigo-950/10 border border-white/10 text-left relative overflow-hidden">
+            <div className="flex items-center gap-3.5 relative z-10">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+                <Mic className="w-5 h-5 animate-pulse text-indigo-300" />
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-300">
+                  ⏰ Oggi hai lezione in aula ({todayClasses[0].item.start_time} - {todayClasses[0].item.end_time})
+                </span>
+                <h3 className="text-base font-black text-white mt-0.5">
+                  {todayClasses[0].course.name} {todayClasses[0].course.professor ? `• ${todayClasses[0].course.professor}` : ''}
+                </h3>
+              </div>
+            </div>
+
+            <Link
+              href={`/course/${todayClasses[0].course.id}/record`}
+              className="inline-flex items-center justify-center gap-2 bg-brand-gradient hover:opacity-95 text-white font-black px-5 py-3 rounded-2xl text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer hover:scale-105 shrink-0 self-start sm:self-auto relative z-10"
+            >
+              <Mic className="w-4 h-4" />
+              <span>Registra Lezione Ora</span>
+            </Link>
+          </div>
+        )}
 
         {/* Responsive Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">

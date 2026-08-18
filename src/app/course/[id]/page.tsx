@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
-import CourseModal from '@/components/CourseModal'
+import CourseModal, { ScheduleItem, SyllabusTopic } from '@/components/CourseModal'
 import BottomNav from '@/components/BottomNav'
 import Toast from '@/components/Toast'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
@@ -29,6 +29,7 @@ import {
   Zap,
   CheckCircle2,
   Flame,
+  BookOpen,
 } from 'lucide-react'
 
 interface Course {
@@ -37,6 +38,10 @@ interface Course {
   professor: string | null
   color: string
   status: string
+  cfu?: number | null
+  exam_date?: string | null
+  schedule?: ScheduleItem[]
+  syllabus_topics?: SyllabusTopic[]
 }
 
 interface Lecture {
@@ -88,7 +93,7 @@ export default function CourseDetailPage() {
       // 1. Fetch course details
       const { data: courseData, error: courseFetchError } = await supabase
         .from('courses')
-        .select('id, name, professor, color, status, deleted_at')
+        .select('id, name, professor, color, status, cfu, exam_date, schedule, syllabus_topics, deleted_at')
         .eq('id', courseId)
         .is('deleted_at', null)
         .maybeSingle()
@@ -567,10 +572,73 @@ export default function CourseDetailPage() {
                     {course.name}
                   </h2>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5 pl-0.5">
-                    {course.professor || t('course.professor.none')}
+                    {course.professor || t('course.professor.none')} {course.cfu ? `• ${course.cfu} CFU` : ''}
                   </p>
                 </div>
               </div>
+
+              {/* Exam countdown if set */}
+              {course.exam_date && (
+                <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-200/80 p-3.5 rounded-2xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Flame className="w-4 h-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-900">
+                        Appello d'Esame
+                      </span>
+                      <span className="text-xs font-black text-slate-900">
+                        {new Date(course.exam_date).toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const days = Math.ceil((new Date(course.exam_date).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
+                    return (
+                      <span className="text-xs font-black px-2.5 py-1 rounded-xl bg-white border border-amber-200 text-amber-800 shadow-xs">
+                        {days > 0 ? `-${days} giorni` : days === 0 ? 'Oggi!' : 'Passato'}
+                      </span>
+                    )
+                  })()}
+                </div>
+              )}
+
+              {/* Weekly schedule if set */}
+              {course.schedule && course.schedule.length > 0 && (
+                <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-50">
+                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
+                    Orario Lezioni in Aula
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {course.schedule.map((item, idx) => {
+                      const dayLabels: Record<string, string> = {
+                        monday: 'Lun',
+                        tuesday: 'Mar',
+                        wednesday: 'Mer',
+                        thursday: 'Gio',
+                        friday: 'Ven',
+                        saturday: 'Sab',
+                        sunday: 'Dom',
+                      }
+                      return (
+                        <span
+                          key={idx}
+                          className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded-xl flex items-center gap-1"
+                        >
+                          <Clock className="w-3 h-3 text-indigo-500" />
+                          <span>{dayLabels[item.day] || item.day} {item.start_time}-{item.end_time}</span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-50 text-xs text-slate-500 font-semibold pl-0.5">
                 <span className="bg-slate-100/60 text-slate-655 border border-slate-150/40 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide">
@@ -584,6 +652,39 @@ export default function CourseDetailPage() {
                 )}
               </div>
             </div>
+
+            {/* Syllabus Roadmap Card (if configured) */}
+            {course.syllabus_topics && course.syllabus_topics.length > 0 && (
+              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-3.5 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-indigo-600" />
+                    <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest">
+                      Syllabus & Programma
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-black text-slate-400">
+                    {course.syllabus_topics.length} Capitoli
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                  {course.syllabus_topics.map((topic, idx) => (
+                    <div
+                      key={topic.id}
+                      className="bg-slate-50 border border-slate-200/60 p-2.5 rounded-xl flex items-center justify-between text-xs"
+                    >
+                      <span className="font-bold text-slate-700 truncate max-w-[200px]">
+                        {idx + 1}. {topic.title}
+                      </span>
+                      <span className="text-[9px] px-2 py-0.5 bg-white border border-slate-200 text-slate-500 rounded-lg font-extrabold">
+                        Modulo
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Course Academic Mastery Card */}
             <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
@@ -695,6 +796,10 @@ export default function CourseDetailPage() {
                 name: course.name,
                 professor: course.professor || '',
                 color: course.color,
+                cfu: course.cfu,
+                exam_date: course.exam_date,
+                schedule: course.schedule,
+                syllabus_topics: course.syllabus_topics,
               }
             : undefined
         }
