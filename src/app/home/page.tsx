@@ -47,7 +47,6 @@ export default function HomePage() {
   const router = useRouter()
   const { t, language } = useLanguage()
   const [courses, setCourses] = useState<Course[]>([])
-  const [recentLectures, setRecentLectures] = useState<any[]>([])
   const [studentName, setStudentName] = useState('Studente')
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
@@ -168,8 +167,6 @@ export default function HomePage() {
           .limit(12)
 
         if (lecturesData && lecturesData.length > 0) {
-          setRecentLectures(lecturesData.slice(0, 5))
-
           // 7. Load study materials across lectures to feed the Ebbinghaus algorithm
           const lectureIds = lecturesData.map((l) => l.id)
           const { data: smList } = await supabase
@@ -552,85 +549,6 @@ export default function HomePage() {
                   </Link>
                 ))}
               </div>
-            </div>
-
-            {/* Feed Section (Recent Lectures) */}
-            <div className="flex flex-col gap-4 text-left">
-              <h2 className="text-xs font-bold text-slate-450 uppercase tracking-widest pl-0.5">
-                {t('home.lectures.recent')}
-              </h2>
-
-              {loading ? (
-                <div className="flex flex-col gap-6">
-                  {[1, 2].map((n) => (
-                    <div
-                      key={n}
-                      className="h-40 bg-white border border-slate-100 rounded-3xl animate-pulse shadow-soft-sm"
-                    />
-                  ))}
-                </div>
-              ) : recentLectures.length === 0 ? (
-                <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center flex flex-col items-center gap-4.5 shadow-soft-sm">
-                  <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100/50 flex items-center justify-center text-indigo-650 shadow-soft-sm">
-                    <BookOpen className="w-6 h-6 text-indigo-500 animate-pulse" />
-                  </div>
-                  <div className="flex flex-col gap-1.5 max-w-sm mx-auto">
-                    <h3 className="font-extrabold text-slate-800 text-base">
-                      {t('home.lectures.empty.title')}
-                    </h3>
-                    <p className="text-xs text-slate-500 leading-normal font-medium">
-                      {t('home.lectures.empty.description')}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {recentLectures.map((lecture) => {
-                    const courseInfo = (Array.isArray(lecture.courses) ? lecture.courses[0] : lecture.courses) || {}
-                    return (
-                      <div
-                        key={lecture.id}
-                        className="bg-white border border-slate-100 rounded-3xl shadow-soft-sm p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-slate-200 transition-all duration-200"
-                      >
-                        <div className="flex items-center gap-3.5">
-                          <div
-                            className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-xs shadow-inner shrink-0"
-                            style={{ backgroundColor: courseInfo.color || '#7c3aed' }}
-                          >
-                            {(courseInfo.name || 'UN').substring(0, 2).toUpperCase()}
-                          </div>
-                          <div className="flex flex-col text-left">
-                            <span className="font-black text-slate-850 text-sm hover:text-indigo-600 transition-colors">
-                              {lecture.title || 'Lezione Senza Titolo'}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                              {courseInfo.name || 'Corso'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 border-slate-50 pt-3 sm:pt-0">
-                          <span
-                            className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                              lecture.status === 'completed'
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {lecture.status === 'completed' ? 'Pronto' : lecture.status}
-                          </span>
-                          <Link
-                            href={`/lecture/${lecture.id}`}
-                            className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer"
-                          >
-                            {t('home.lectures.openHub')}
-                          </Link>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
             </div>
 
           </div>
