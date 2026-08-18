@@ -15,6 +15,9 @@ import {
   Trash2,
   Sparkles,
   Layers,
+  Award,
+  FileText,
+  CheckCircle2,
 } from 'lucide-react'
 import { useLanguage } from '@/contexts/LanguageContext'
 
@@ -31,6 +34,13 @@ export interface SyllabusTopic {
   order_index: number
 }
 
+export interface ExamMilestone {
+  id: string
+  name: string
+  type: 'midterm' | 'final' | 'project'
+  date: string
+}
+
 interface CourseModalProps {
   isOpen: boolean
   onClose: () => void
@@ -44,6 +54,8 @@ interface CourseModalProps {
     exam_date?: string | null
     schedule?: ScheduleItem[]
     syllabus_topics?: SyllabusTopic[]
+    syllabus_text?: string | null
+    exam_milestones?: ExamMilestone[]
   }
 }
 
@@ -65,6 +77,42 @@ const weekDays: { key: ScheduleItem['day']; label: string; short: string }[] = [
   { key: 'saturday', label: 'Sabato', short: 'Sab' },
 ]
 
+// Smart parser to extract chapters from raw syllabus text/markdown
+export function extractChaptersFromText(rawText: string): SyllabusTopic[] {
+  if (!rawText.trim()) return []
+
+  const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean)
+  const extracted: string[] = []
+
+  lines.forEach((line) => {
+    // Check if line looks like a header, numbered item, module, chapter or bullet
+    const headerMatch = line.match(
+      /^(#{1,4}\s*|\d+[\.\)\-]\s*|[-*•]\s*|(Modulo|Capitolo|Lezione|Chapter|Unit|Topic|Part)\s*[\d\w]*[:\-]?\s*)(.+)/i
+    )
+    if (headerMatch && headerMatch[3]) {
+      const cleanTitle = headerMatch[3].trim().replace(/^#+\s*/, '')
+      if (cleanTitle.length > 2 && cleanTitle.length < 120 && !extracted.includes(cleanTitle)) {
+        extracted.push(cleanTitle)
+      }
+    } else if (
+      line.length > 3 &&
+      line.length < 90 &&
+      !line.includes('http') &&
+      !extracted.includes(line)
+    ) {
+      extracted.push(line.replace(/^#+\s*/, ''))
+    }
+  })
+
+  const finalTitles = extracted.length > 0 ? extracted : lines.slice(0, 25)
+
+  return finalTitles.slice(0, 30).map((title, idx) => ({
+    id: crypto.randomUUID(),
+    title,
+    order_index: idx + 1,
+  }))
+}
+
 export default function CourseModal({
   isOpen,
   onClose,
@@ -77,12 +125,16 @@ export default function CourseModal({
   const [professor, setProfessor] = useState('')
   const [cfu, setCfu] = useState<string>('')
   const [selectedColor, setSelectedColor] = useState(colorPresets[0].hex)
-  const [examDate, setExamDate] = useState('')
+  
+  // Milestones & Exam Dates
+  const [examMilestones, setExamMilestones] = useState<ExamMilestone[]>([])
+  const [finalExamDate, setFinalExamDate] = useState('')
 
   // Schedule state
   const [schedule, setSchedule] = useState<ScheduleItem[]>([])
   
   // Syllabus state
+  const [syllabusText, setSyllabusText] = useState('')
   const [syllabusTopics, setSyllabusTopics] = useState<SyllabusTopic[]>([])
   const [newTopicTitle, setNewTopicTitle] = useState('')
 
@@ -100,17 +152,27 @@ export default function CourseModal({
         setProfessor(initialData.professor || '')
         setCfu(initialData.cfu ? String(initialData.cfu) : '')
         setSelectedColor(initialData.color || colorPresets[0].hex)
-        setExamDate(initialData.exam_date || '')
+        setFinalExamDate(initialData.exam_date || '')
         setSchedule(initialData.schedule || [])
         setSyllabusTopics(initialData.syllabus_topics || [])
+        setSyllabusText(initialData.syllabus_text || '')
+        setExamMilestones(
+          initialData.exam_milestones && initialData.exam_milestones.length > 0
+            ? initialData.exam_milestones
+            : initialData.exam_date
+            ? [{ id: 'final', name: 'Appello Finale', type: 'final', date: initialData.exam_date }]
+            : []
+        )
       } else {
         setName('')
         setProfessor('')
         setCfu('')
         setSelectedColor(colorPresets[0].hex)
-        setExamDate('')
+        setFinalExamDate('')
         setSchedule([])
         setSyllabusTopics([])
+        setSyllabusText('')
+        setExamMilestones([])
       }
       setActiveTab('info')
       setError(null)
@@ -120,7 +182,7 @@ export default function CourseModal({
 
   if (!isOpen) return null
 
-  // Toggle or add day in schedule
+  // Schedule toggle
   const handleToggleDay = (dayKey: ScheduleItem['day']) => {
     const existingIndex = schedule.findIndex((s) => s.day === dayKey)
     if (existingIndex >= 0) {
@@ -143,7 +205,44 @@ export default function CourseModal({
     )
   }
 
-  // Add a topic to syllabus
+  // Milestone management (Midterms & Finals)
+  const handleAddMilestone = (type: 'midterm' | 'final') => {
+    const defaultName =
+      type === 'midterm'
+        ? `Midterm / ${examMilestones.filter((m) => m.type === 'midterm').length + 1}° Parziale`
+        : 'Appello Finale'
+    
+    setExamMilestones([
+      ...examMilestones,
+      {
+        id: crypto.randomUUID(),
+        name: defaultName,
+        type,
+        date: '',
+      },
+    ])
+  }
+
+  const handleUpdateMilestone = (id: string, field: 'name' | 'date', value: string) => {
+    setExamMilestones(
+      examMilestones.map((m) => (m.id === id ? { ...m, [field]: value } : m))
+    )
+  }
+
+  const handleRemoveMilestone = (id: string) => {
+    setExamMilestones(examMilestones.filter((m) => m.id !== id))
+  }
+
+  // Smart extraction of chapters from pasted syllabus text
+  const handleAutoExtractChapters = () => {
+    if (!syllabusText.trim()) return
+    const extracted = extractChaptersFromText(syllabusText)
+    if (extracted.length > 0) {
+      setSyllabusTopics(extracted)
+    }
+  }
+
+  // Manual topic add
   const handleAddSyllabusTopic = (e?: React.FormEvent) => {
     if (e) e.preventDefault()
     if (!newTopicTitle.trim()) return
@@ -189,14 +288,23 @@ export default function CourseModal({
         return
       }
 
+      // Determine main exam_date (first upcoming milestone date or direct input)
+      const primaryExamDate =
+        finalExamDate ||
+        examMilestones.find((m) => m.type === 'final')?.date ||
+        examMilestones[0]?.date ||
+        null
+
       const payload = {
         name: name.trim(),
         professor: professor.trim() || null,
         color: selectedColor,
         cfu: cfu ? parseInt(cfu, 10) : null,
-        exam_date: examDate || null,
+        exam_date: primaryExamDate,
         schedule: schedule,
+        syllabus_text: syllabusText.trim() || null,
         syllabus_topics: syllabusTopics,
+        exam_milestones: examMilestones,
       }
 
       if (isEdit) {
@@ -266,7 +374,7 @@ export default function CourseModal({
 
   return (
     <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white border border-slate-200 w-full max-w-lg p-6 sm:p-7 rounded-3xl shadow-soft-lg flex flex-col gap-5 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white border border-slate-200 w-full max-w-xl p-6 sm:p-7 rounded-3xl shadow-soft-lg flex flex-col gap-5 animate-in zoom-in-95 duration-200 max-h-[92vh] overflow-y-auto">
         
         {/* Header */}
         <div className="flex justify-between items-center">
@@ -322,8 +430,8 @@ export default function CourseModal({
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            <span>3. Syllabus & Esame</span>
-            {(syllabusTopics.length > 0 || examDate) && (
+            <span>3. Syllabus & Esami</span>
+            {(syllabusTopics.length > 0 || examMilestones.length > 0 || finalExamDate) && (
               <span className="w-2 h-2 rounded-full bg-emerald-600" />
             )}
           </button>
@@ -510,35 +618,152 @@ export default function CourseModal({
 
           {/* TAB 3: SYLLABUS & EXAM ROADMAP */}
           {activeTab === 'syllabus' && (
-            <div className="flex flex-col gap-4">
-              {/* Exam Date input */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest pl-0.5">
-                  Data Appello d'Esame (Opzionale)
-                </label>
-                <div className="flex items-center gap-2 bg-white border border-slate-200 px-3.5 py-2 rounded-2xl">
-                  <Calendar className="w-4 h-4 text-indigo-600" />
-                  <input
-                    type="date"
-                    value={examDate}
-                    onChange={(e) => setExamDate(e.target.value)}
-                    className="bg-transparent text-xs font-bold text-slate-800 w-full focus:outline-none"
-                  />
+            <div className="flex flex-col gap-5">
+              
+              {/* SECTION A: TAPPE D'ESAME & MIDTERM */}
+              <div className="flex flex-col gap-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-amber-500" />
+                    <label className="text-[10px] font-extrabold text-slate-800 uppercase tracking-widest">
+                      Tappe d'Esame (Midterm, Parziali & Finale)
+                    </label>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => handleAddMilestone('midterm')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-extrabold hover:bg-amber-100 transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>+ Midterm</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddMilestone('final')}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-lg text-[10px] font-extrabold hover:bg-indigo-100 transition-colors cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>+ Finale</span>
+                    </button>
+                  </div>
                 </div>
+
+                {examMilestones.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {examMilestones.map((m) => (
+                      <div
+                        key={m.id}
+                        className="bg-slate-50 border border-slate-200/80 p-3 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                      >
+                        <div className="flex items-center gap-2 flex-1">
+                          <span
+                            className={`text-[9px] px-2 py-0.5 rounded-md font-black uppercase tracking-wider ${
+                              m.type === 'midterm'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-indigo-100 text-indigo-800'
+                            }`}
+                          >
+                            {m.type === 'midterm' ? 'Midterm' : 'Finale'}
+                          </span>
+                          <input
+                            type="text"
+                            value={m.name}
+                            onChange={(e) => handleUpdateMilestone(m.id, 'name', e.target.value)}
+                            className="bg-white border border-slate-200 px-2.5 py-1 rounded-xl text-xs font-bold text-slate-800 flex-1 focus:outline-none"
+                            placeholder="Nome prova (es. 1° Parziale)"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 py-1 rounded-xl">
+                            <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                            <input
+                              type="date"
+                              value={m.date}
+                              onChange={(e) => handleUpdateMilestone(m.id, 'date', e.target.value)}
+                              className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMilestone(m.id)}
+                            className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* Quick single final exam date input */
+                  <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-2xl">
+                    <Calendar className="w-4 h-4 text-indigo-600" />
+                    <input
+                      type="date"
+                      value={finalExamDate}
+                      onChange={(e) => setFinalExamDate(e.target.value)}
+                      placeholder="Data Appello Finale"
+                      className="bg-transparent text-xs font-bold text-slate-800 w-full focus:outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
-              {/* Syllabus Topics */}
-              <div className="flex flex-col gap-2 pt-1">
+              {/* SECTION B: TESTO COMPLETO DEL SYLLABUS & ESTRAZIONE CAPITOLI */}
+              <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-indigo-600" />
+                    <label className="text-[10px] font-extrabold text-slate-800 uppercase tracking-widest">
+                      Incolla il Testo del Syllabus
+                    </label>
+                  </div>
+                  {syllabusText.trim() && (
+                    <button
+                      type="button"
+                      onClick={handleAutoExtractChapters}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-brand-gradient text-white rounded-xl text-[10px] font-black shadow-xs hover:opacity-95 transition-all cursor-pointer hover:scale-105"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Estrai Capitoli Subito</span>
+                    </button>
+                  )}
+                </div>
+
+                <textarea
+                  rows={4}
+                  value={syllabusText}
+                  onChange={(e) => setSyllabusText(e.target.value)}
+                  placeholder="Incolla qui il testo o il programma d'esame (es. # Modulo 1: Titolo, # Modulo 2... o l'elenco dei capitoli del docente)"
+                  className="w-full bg-white border border-slate-200 p-3 rounded-2xl text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all font-mono leading-relaxed resize-none"
+                />
+
+                {syllabusText.trim() && syllabusTopics.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={handleAutoExtractChapters}
+                    className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold border border-indigo-200 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Genera Capitoli Automaticamente dal Testo Incollato</span>
+                  </button>
+                )}
+              </div>
+
+              {/* SECTION C: CAPITOLI ESTRATTI (SYLLABUS TOPICS) */}
+              <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest pl-0.5">
-                    Capitoli del Programma (Syllabus)
+                    Mappa dei Capitoli ({syllabusTopics.length})
                   </label>
-                  <span className="text-[10px] font-bold text-slate-400">
-                    {syllabusTopics.length} capitoli
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Serviranno per collegare le lezioni
                   </span>
                 </div>
 
-                {/* Add topic input */}
+                {/* Add topic single line input */}
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
@@ -550,7 +775,7 @@ export default function CourseModal({
                         handleAddSyllabusTopic()
                       }
                     }}
-                    placeholder="es. Modulo 1: I Contratti e la Risoluzione"
+                    placeholder="Aggiungi singolo capitolo (es. 1. I Contratti)"
                     className="flex-1 bg-white border border-slate-200 px-3.5 py-2 rounded-xl text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900"
                   />
                   <button
@@ -564,7 +789,7 @@ export default function CourseModal({
 
                 {/* Topics list */}
                 {syllabusTopics.length > 0 ? (
-                  <div className="flex flex-col gap-1.5 max-h-44 overflow-y-auto pr-1">
+                  <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
                     {syllabusTopics.map((topic, idx) => (
                       <div
                         key={topic.id}
@@ -585,10 +810,11 @@ export default function CourseModal({
                   </div>
                 ) : (
                   <p className="text-[11px] text-slate-400 text-center py-2 font-medium">
-                    Aggiungi i capitoli d'esame per monitorare quali lezioni hai già coperto.
+                    Incolla il testo del Syllabus sopra per estrarre automaticamente i capitoli!
                   </p>
                 )}
               </div>
+
             </div>
           )}
 
@@ -614,7 +840,7 @@ export default function CourseModal({
                 }
                 className="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs shadow-md transition-all cursor-pointer text-center"
               >
-                Avanti ({activeTab === 'info' ? 'Orario Lezioni' : 'Syllabus & Esame'})
+                Avanti ({activeTab === 'info' ? 'Orario Lezioni' : 'Syllabus & Esami'})
               </button>
             ) : (
               <button

@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
-import CourseModal, { ScheduleItem, SyllabusTopic } from '@/components/CourseModal'
+import CourseModal, { ScheduleItem, SyllabusTopic, ExamMilestone } from '@/components/CourseModal'
 import BottomNav from '@/components/BottomNav'
 import Toast from '@/components/Toast'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
@@ -42,6 +42,8 @@ interface Course {
   exam_date?: string | null
   schedule?: ScheduleItem[]
   syllabus_topics?: SyllabusTopic[]
+  syllabus_text?: string | null
+  exam_milestones?: ExamMilestone[]
 }
 
 interface Lecture {
@@ -93,7 +95,7 @@ export default function CourseDetailPage() {
       // 1. Fetch course details
       const { data: courseData, error: courseFetchError } = await supabase
         .from('courses')
-        .select('id, name, professor, color, status, cfu, exam_date, schedule, syllabus_topics, deleted_at')
+        .select('id, name, professor, color, status, cfu, exam_date, schedule, syllabus_topics, syllabus_text, exam_milestones, deleted_at')
         .eq('id', courseId)
         .is('deleted_at', null)
         .maybeSingle()
@@ -577,8 +579,64 @@ export default function CourseDetailPage() {
                 </div>
               </div>
 
-              {/* Exam countdown if set */}
-              {course.exam_date && (
+              {/* Exam countdown & Milestones (Midterms + Final) */}
+              {course.exam_milestones && course.exam_milestones.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {course.exam_milestones.map((m) => {
+                    if (!m.date) return null
+                    const days = Math.ceil(
+                      (new Date(m.date).getTime() - new Date().setHours(0, 0, 0, 0)) /
+                        (1000 * 60 * 60 * 24)
+                    )
+                    const isMidterm = m.type === 'midterm'
+                    return (
+                      <div
+                        key={m.id}
+                        className={`border p-3 rounded-2xl flex items-center justify-between gap-3 ${
+                          isMidterm
+                            ? 'bg-amber-500/10 border-amber-200/80'
+                            : 'bg-indigo-500/10 border-indigo-200/80'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className={`w-7 h-7 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
+                              isMidterm ? 'bg-amber-500' : 'bg-indigo-600'
+                            }`}
+                          >
+                            <Award className="w-4 h-4" />
+                          </div>
+                          <div className="flex flex-col">
+                            <span
+                              className={`text-[9px] font-black uppercase tracking-wider ${
+                                isMidterm ? 'text-amber-900' : 'text-indigo-900'
+                              }`}
+                            >
+                              {m.name}
+                            </span>
+                            <span className="text-xs font-black text-slate-900">
+                              {new Date(m.date).toLocaleDateString(
+                                language === 'it' ? 'it-IT' : 'en-US',
+                                { day: 'numeric', month: 'short', year: 'numeric' }
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`text-xs font-black px-2.5 py-1 rounded-xl bg-white border shadow-xs ${
+                            isMidterm
+                              ? 'border-amber-200 text-amber-800'
+                              : 'border-indigo-200 text-indigo-800'
+                          }`}
+                        >
+                          {days > 0 ? `-${days} giorni` : days === 0 ? 'Oggi!' : 'Passato'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : course.exam_date ? (
                 <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-200/80 p-3.5 rounded-2xl flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
@@ -607,7 +665,7 @@ export default function CourseDetailPage() {
                     )
                   })()}
                 </div>
-              )}
+              ) : null}
 
               {/* Weekly schedule if set */}
               {course.schedule && course.schedule.length > 0 && (
@@ -800,6 +858,8 @@ export default function CourseDetailPage() {
                 exam_date: course.exam_date,
                 schedule: course.schedule,
                 syllabus_topics: course.syllabus_topics,
+                syllabus_text: course.syllabus_text,
+                exam_milestones: course.exam_milestones,
               }
             : undefined
         }
