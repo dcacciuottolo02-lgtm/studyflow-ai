@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import CourseModal, { ScheduleItem, SyllabusTopic, ExamMilestone } from '@/components/CourseModal'
+import SyllabusDrawerModal from '@/components/SyllabusDrawerModal'
 import BottomNav from '@/components/BottomNav'
 import Toast from '@/components/Toast'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
@@ -31,6 +32,8 @@ import {
   Flame,
   BookOpen,
   BookmarkCheck,
+  ChevronRight,
+  Plus,
 } from 'lucide-react'
 
 interface Course {
@@ -76,12 +79,12 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showDropdown, setShowDropdown] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isSyllabusDrawerOpen, setIsSyllabusDrawerOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info')
   const [error, setError] = useState<string | null>(null)
   const [usage, setUsage] = useState<UsageStatus | null>(null)
 
-  // Fetch course details & its active lectures
   const fetchCourseAndLectures = async () => {
     try {
       const supabase = createClient()
@@ -95,7 +98,6 @@ export default function CourseDetailPage() {
         return
       }
 
-      // 1. Fetch course details (with fallback for optional new columns)
       let courseData: any = null
       const { data: fullCourse, error: courseFetchError } = await supabase
         .from('courses')
@@ -124,7 +126,6 @@ export default function CourseDetailPage() {
 
       setCourse(courseData)
 
-      // 2. Fetch lectures
       const { data: lecturesData } = await supabase
         .from('lectures')
         .select('id, title, recorded_at, duration_seconds, status, created_at')
@@ -135,7 +136,6 @@ export default function CourseDetailPage() {
       if (lecturesData) {
         setLectures(lecturesData)
 
-        // 3. Fetch study materials to calculate course mastery
         const lectureIds = lecturesData.map((l) => l.id)
         if (lectureIds.length > 0) {
           const { data: smData } = await supabase
@@ -150,17 +150,12 @@ export default function CourseDetailPage() {
 
           if (smData) {
             let knownCount = 0
-            let unknownCount = 0
             let totalCards = 0
-            let totalQuizzes = 0
-
+            
             smData.forEach((sm) => {
               const fcs = (sm.flashcard_sets?.[0]?.flashcards as any[]) || []
               totalCards += fcs.length
               knownCount += fcs.filter((fc) => fc.status === 'known').length
-              unknownCount += fcs.filter((fc) => fc.status === 'unknown').length
-              const qqs = (sm.quiz_sets?.[0]?.quiz_questions as any[]) || []
-              totalQuizzes += qqs.length
             })
 
             const completedLecs = lecturesData.filter((l) => l.status === 'completed').length
@@ -168,19 +163,19 @@ export default function CourseDetailPage() {
             setMasteryStats({
               totalCards,
               knownCards: knownCount,
-              unknownCards: unknownCount,
-              totalQuizzes,
+              unknownCards: totalCards - knownCount,
+              totalQuizzes: 0,
               completedLectures: completedLecs,
             })
           }
         }
       }
 
-      // 4. Fetch monthly usage limit status
       const usageStatus = await checkUsageStatus()
       setUsage(usageStatus)
-    } catch {
-      setError(t('course.error.loading'))
+    } catch (err: any) {
+      console.error('Fetch course error:', err)
+      setError(t('course.error.fetchFailed'))
     } finally {
       setLoading(false)
     }
@@ -204,7 +199,6 @@ export default function CourseDetailPage() {
       const supabase = createClient()
       const nowStr = new Date().toISOString()
 
-      // 1. Fetch active lectures in this course
       const { data: courseLectures } = await supabase
         .from('lectures')
         .select('id')
@@ -214,7 +208,6 @@ export default function CourseDetailPage() {
       const lectureIds = courseLectures?.map((l) => l.id) || []
 
       if (lectureIds.length > 0) {
-        // 2. Cancel active ai_jobs for these lectures
         await supabase
           .from('ai_jobs')
           .update({
@@ -225,14 +218,12 @@ export default function CourseDetailPage() {
           .in('lecture_id', lectureIds)
           .in('status', ['created', 'queued', 'running', 'retrying'])
 
-        // 3. Soft-delete all lectures in this course
         await supabase
           .from('lectures')
           .update({ deleted_at: nowStr })
           .in('id', lectureIds)
       }
 
-      // 4. Soft-delete the course itself
       const { error: deleteError } = await supabase
         .from('courses')
         .update({ deleted_at: nowStr })
@@ -260,7 +251,6 @@ export default function CourseDetailPage() {
     if (!confirmDelete) return
 
     try {
-      // Optimistic UI update
       setLectures((prev) => prev.filter((l) => l.id !== lectureId))
       setToastMessage(t('course.toast.deleteLectureSuccess'))
       setToastType('success')
@@ -272,36 +262,33 @@ export default function CourseDetailPage() {
         .eq('id', lectureId)
 
       if (deleteError) {
-        // Rollback on failure
         fetchCourseAndLectures()
         setToastMessage(t('course.toast.deleteLectureError'))
         setToastType('error')
       }
     } catch (err) {
-      console.error('Delete lecture error:', err)
+      console.error('Soft delete lecture error:', err)
       fetchCourseAndLectures()
-      setToastMessage(t('course.toast.deleteError'))
+      setToastMessage(t('course.toast.deleteLectureError'))
       setToastType('error')
     }
   }
 
   const handleCancelAndSoftDeleteLecture = async (lectureId: string, lectureTitle: string) => {
-    const confirmCancel = confirm(
+    const confirmDelete = confirm(
       t('course.confirm.cancelLecture', { title: lectureTitle })
     )
-    if (!confirmCancel) return
+    if (!confirmDelete) return
 
     try {
-      // Optimistic UI update
       setLectures((prev) => prev.filter((l) => l.id !== lectureId))
-      setToastMessage(t('course.toast.cancelLectureSuccess'))
+      setToastMessage(t('course.toast.cancelSuccess'))
       setToastType('success')
 
       const supabase = createClient()
       const nowStr = new Date().toISOString()
 
-      // 1. Cancel active ai_jobs
-      const { error: jobsError } = await supabase
+      await supabase
         .from('ai_jobs')
         .update({
           status: 'failed',
@@ -311,42 +298,45 @@ export default function CourseDetailPage() {
         .eq('lecture_id', lectureId)
         .in('status', ['created', 'queued', 'running', 'retrying'])
 
-      // 2. Soft-delete the lecture
       const { error: deleteError } = await supabase
         .from('lectures')
-        .update({ deleted_at: nowStr, status: 'failed' })
+        .update({ deleted_at: nowStr })
         .eq('id', lectureId)
 
-      if (jobsError || deleteError) {
-        console.error('Cancel and delete error:', jobsError, deleteError)
+      if (deleteError) {
         fetchCourseAndLectures()
-        setToastMessage(t('course.toast.cancelLectureError'))
+        setToastMessage(t('course.toast.cancelError'))
         setToastType('error')
       }
     } catch (err) {
-      console.error('Cancel and delete catch error:', err)
+      console.error('Cancel lecture error:', err)
       fetchCourseAndLectures()
-      setToastMessage(t('course.toast.genericError'))
+      setToastMessage(t('course.toast.cancelError'))
       setToastType('error')
     }
   }
 
-  const formatDuration = (secs: number | null) => {
-    if (!secs) return '--:--'
-    const h = Math.floor(secs / 3600)
-    const m = Math.floor((secs % 3600) / 60)
-    const s = secs % 60
-    if (h > 0) return `${h}h ${m}m`
-    return `${m}m ${s}s`
-  }
-
-  const formatRecordedDate = (recordedAt: string, createdAt: string) => {
-    const targetDate = new Date(recordedAt || createdAt)
-    return targetDate.toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', {
+  const formatRecordedDate = (dateString?: string, fallbackString?: string) => {
+    const effective = dateString || fallbackString
+    if (!effective) return ''
+    const d = new Date(effective)
+    if (isNaN(d.getTime())) return ''
+    return d.toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
     })
+  }
+
+  const formatDuration = (totalSeconds: number | null) => {
+    if (!totalSeconds || totalSeconds <= 0) return '0 min'
+    const minutes = Math.floor(totalSeconds / 60)
+    const hours = Math.floor(minutes / 60)
+    const remMinutes = minutes % 60
+    if (hours > 0) {
+      return `${hours}h ${remMinutes}m`
+    }
+    return `${minutes} min`
   }
 
   const getStatusLabel = (status: string) => {
@@ -385,7 +375,6 @@ export default function CourseDetailPage() {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
         <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-        <p className="text-slate-500 text-sm mt-2 font-semibold">{t('course.loading')}</p>
       </div>
     )
   }
@@ -393,81 +382,97 @@ export default function CourseDetailPage() {
   if (error || !course) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-16 h-16 bg-rose-50 text-rose-655 border border-rose-100 rounded-3xl flex items-center justify-center mb-4">
-          <AlertCircle className="w-8 h-8" />
-        </div>
-        <h2 className="text-xl font-black text-slate-800 mb-2">{t('course.error.somethingWentWrong')}</h2>
-        <p className="text-slate-500 text-sm max-w-xs mb-6 font-medium">
-          {error || t('course.error.notFound')}
-        </p>
-        <Link
-          href="/home"
-          className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-6 py-3 rounded-xl text-sm transition-all"
-        >
-          {t('course.error.backToHome')}
-        </Link>
+        <AlertCircle className="w-12 h-12 text-rose-400 mb-4" />
+        <h2 className="text-xl font-black text-slate-800">{error || t('course.error.notFound')}</h2>
+        <Link href="/home" className="mt-4 text-indigo-600 font-bold">{t('course.error.backToHome')}</Link>
       </div>
     )
   }
 
-  // Aggregate duration stats
-  const totalDuration = lectures.reduce((acc, lec) => acc + (lec.duration_seconds || 0), 0)
+  const dayLabels: Record<string, string> = {
+    monday: 'Lun',
+    tuesday: 'Mar',
+    wednesday: 'Mer',
+    thursday: 'Gio',
+    friday: 'Ven',
+    saturday: 'Sab',
+    sunday: 'Dom',
+  }
+
+  const chaptersCount = course.syllabus_topics?.length || 0
+  const examsCount = course.exam_milestones?.length || (course.exam_date ? 1 : 0)
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 transition-colors duration-300">
       
-      {/* Navbar Header */}
       <header className="sticky top-0 bg-white/80 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between z-30">
-        <Link
-          href="/home"
-          className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 hover:shadow-soft-sm transition-all duration-200 cursor-pointer"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-
-        <h1 className="font-black text-sm text-slate-850 tracking-tight truncate max-w-[160px] sm:max-w-md">
-          {course.name}
-        </h1>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/home"
+            className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 transition-all cursor-pointer"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div className="flex items-center gap-1.5 text-xs text-slate-400 font-bold">
+            <Link href="/home" className="hover:text-slate-600 transition-colors">Home</Link>
+            <span>/</span>
+            <span className="text-slate-800 font-extrabold truncate max-w-[160px] sm:max-w-xs">{course.name}</span>
+          </div>
+        </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsEditModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl border border-indigo-100 bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 font-extrabold text-xs transition-all cursor-pointer shadow-soft-xs"
+            onClick={() => setIsSyllabusDrawerOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-indigo-50/90 hover:bg-indigo-100/90 text-indigo-700 font-extrabold text-xs border border-indigo-200/80 shadow-soft-xs transition-all cursor-pointer"
           >
             <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="hidden sm:inline">Modifica Info & Syllabus</span>
+            <span className="hidden sm:inline">Programma & Info Esame</span>
             <span className="sm:hidden">Syllabus</span>
+            {chaptersCount > 0 && (
+              <span className="px-1.5 py-0.2 bg-indigo-600 text-white rounded-md text-[9px] font-black">
+                {chaptersCount}
+              </span>
+            )}
           </button>
+
+          <Link
+            href={`/course/${course.id}/record`}
+            className="inline-flex items-center gap-2 bg-brand-gradient hover:opacity-95 text-white font-extrabold text-xs px-4 py-2 rounded-2xl shadow-md transition-all cursor-pointer"
+          >
+            <Mic className="w-3.5 h-3.5 fill-white" />
+            <span className="hidden sm:inline">Registra Lezione</span>
+            <span className="sm:hidden">Registra</span>
+          </Link>
 
           <div className="relative">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 hover:shadow-soft-sm transition-all duration-200 cursor-pointer"
+              className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 transition-all cursor-pointer"
             >
-              <MoreVertical className="w-5 h-5" />
+              <MoreVertical className="w-4 h-4" />
             </button>
 
             {showDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-soft-lg py-1.5 z-40 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-soft-lg py-1.5 z-40">
                 <button
                   onClick={() => {
                     setIsEditModalOpen(true)
                     setShowDropdown(false)
                   }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-slate-750 hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer font-bold"
+                  className="w-full text-left px-4 py-2.5 text-sm text-slate-750 hover:bg-slate-50 font-bold"
                 >
-                  <Edit3 className="w-4 h-4 text-indigo-500" />
-                  <span>{t('course.dropdown.edit')}</span>
+                  <Edit3 className="w-4 h-4 inline mr-2 text-indigo-500" />
+                  {t('course.dropdown.edit')}
                 </button>
                 <button
                   onClick={() => {
                     handleDeleteCourse()
                     setShowDropdown(false)
                   }}
-                  className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-100 font-bold"
+                  className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 font-bold border-t"
                 >
-                  <Trash2 className="w-4 h-4 text-rose-500" />
-                  <span>{t('course.dropdown.delete')}</span>
+                  <Trash2 className="w-4 h-4 inline mr-2 text-rose-500" />
+                  {t('course.dropdown.delete')}
                 </button>
               </div>
             )}
@@ -475,458 +480,231 @@ export default function CourseDetailPage() {
         </div>
       </header>
 
-      {/* Main Container */}
-      <main className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-6">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
         
-        {/* Responsive Grid Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          
-          {/* Main Column (2 cols on lg): Lectures List */}
-          <div className="lg:col-span-2 flex flex-col gap-4">
-            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest pl-1">
-              {t('course.lectures.title')}
-            </h2>
+        <section className="bg-white border border-slate-100 rounded-3xl p-6 sm:p-7 shadow-soft-sm flex flex-col gap-5 relative overflow-hidden">
+          <div
+            className="absolute -right-20 -top-20 w-64 h-64 rounded-full opacity-10 blur-3xl pointer-events-none"
+            style={{ backgroundColor: course.color || '#6366F1' }}
+          />
 
-            {lectures.length === 0 ? (
-              /* Empty Lectures State */
-              <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center flex flex-col items-center gap-4.5 shadow-soft-sm">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-100/50 flex items-center justify-center text-indigo-650 shadow-soft-sm">
-                  <Mic className="w-6 h-6 text-indigo-500 animate-bounce" />
-                </div>
-                <div className="flex flex-col gap-1.5 max-w-sm mx-auto">
-                  <h3 className="font-bold text-slate-800 text-base">
-                    {t('course.lectures.empty.title')}
-                  </h3>
-                  <p className="text-xs text-slate-500 leading-normal font-medium">
-                    {t('course.lectures.empty.description')}
-                  </p>
-                </div>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 z-10">
+            <div className="flex items-center gap-4">
+              <div
+                className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-white text-lg sm:text-xl font-black shadow-md shrink-0"
+                style={{ backgroundColor: course.color || '#6366F1' }}
+              >
+                {course.name.substring(0, 2).toUpperCase()}
               </div>
-            ) : (
-              /* Lectures List */
-              <div className="flex flex-col gap-4">
-                {lectures.map((lecture) => (
-                  <div
-                    key={lecture.id}
-                    className="group bg-white border border-slate-100 rounded-3xl p-5 shadow-soft-sm hover:shadow-soft-md hover:border-slate-200 hover:-translate-y-0.5 transition-all duration-250 flex items-center justify-between gap-4"
-                  >
-                    <Link
-                      href={`/lecture/${lecture.id}`}
-                      className="flex items-center gap-3.5 grow overflow-hidden cursor-pointer"
-                    >
-                      {/* Media Type Icon wrapper */}
-                      <div className="w-11 h-11 shrink-0 rounded-2xl bg-indigo-50 border border-indigo-100/40 flex items-center justify-center text-indigo-650 group-hover:bg-brand-gradient group-hover:text-white group-hover:border-transparent transition-all duration-250 shadow-soft-sm">
-                        <FileAudio className="w-5 h-5" />
-                      </div>
 
-                      <div className="flex flex-col gap-0.5 grow overflow-hidden">
-                        <h4 className="font-extrabold text-slate-800 group-hover:text-indigo-650 text-sm truncate leading-snug transition-colors">
-                          {lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })}
-                        </h4>
-                        <div className="flex items-center gap-2.5 text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-0.5">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3 text-slate-350" />
-                            <span>{formatRecordedDate(lecture.recorded_at, lecture.created_at)}</span>
-                          </span>
-                          {lecture.duration_seconds ? (
-                            <span className="flex items-center gap-1 border-l border-slate-150 pl-2.5">
-                              <Clock className="w-3 h-3 text-slate-355" />
-                              <span>{formatDuration(lecture.duration_seconds)}</span>
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                    </Link>
+              <div className="flex flex-col gap-0.5 text-left">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                    {course.name}
+                  </h1>
+                  {course.cfu && (
+                    <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 font-extrabold text-[10px] rounded-lg border">
+                      {course.cfu} CFU
+                    </span>
+                  )}
+                </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Status Indicator pill */}
-                      <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full border tracking-wide ${getStatusBadgeStyles(lecture.status)}`}>
-                        {getStatusLabel(lecture.status)}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 font-semibold mt-0.5">
+                  {course.professor && (
+                    <span className="text-slate-700 font-bold">Docente: {course.professor}</span>
+                  )}
+                  {course.schedule && course.schedule.length > 0 && (
+                    <div className="flex items-center gap-1 text-indigo-700 font-bold bg-indigo-50/80 px-2 py-0.5 rounded-lg border border-indigo-100">
+                      <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>
+                        {course.schedule
+                          .map((s) => `${dayLabels[s.day] || s.day} ${s.start_time}-${s.end_time}`)
+                          .join(' • ')}
                       </span>
-
-                      {/* Action button */}
-                      {['queued', 'processing'].includes(lecture.status) ? (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            handleCancelAndSoftDeleteLecture(
-                              lecture.id,
-                              lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })
-                            )
-                          }}
-                          className="p-2 bg-rose-50 hover:bg-rose-100/80 text-rose-650 hover:text-rose-700 border border-rose-150/40 rounded-xl transition-all cursor-pointer flex items-center justify-center hover:scale-[1.03]"
-                          title={t('course.tooltip.cancelAndEliminate')}
-                        >
-                          <X className="w-3.5 h-3.5 stroke-[3]" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            handleSoftDeleteLecture(
-                              lecture.id,
-                              lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })
-                            )
-                          }}
-                          className="p-2 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-150/40 hover:border-rose-150/50 rounded-xl transition-all cursor-pointer flex items-center justify-center hover:scale-[1.03]"
-                          title={t('course.tooltip.deleteLecture')}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
                     </div>
-                  </div>
-                ))}
+                  )}
+                </div>
               </div>
-            )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsSyllabusDrawerOpen(true)}
+                className="w-full sm:w-auto px-4 py-2.5 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 text-slate-700 font-extrabold text-xs rounded-2xl transition-all flex items-center justify-between gap-3 cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-indigo-600" />
+                  <span className="text-left">
+                    {chaptersCount > 0 ? `${chaptersCount} Moduli • ${examsCount} Prove` : 'Visualizza Syllabus'}
+                  </span>
+                </div>
+                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between pl-1">
+            <div className="flex items-center gap-2">
+              <Mic className="w-4 h-4 text-indigo-600" />
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider">
+                Lezioni Registrate
+              </h2>
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-600 text-[10px] font-extrabold rounded-full">
+                {lectures.length}
+              </span>
+            </div>
+
+            <Link
+              href={`/course/${course.id}/record`}
+              className="text-xs font-extrabold text-indigo-600 hover:text-indigo-700 hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Nuova Registrazione</span>
+            </Link>
           </div>
 
-          {/* Sidebar Column (1 col on lg): Course Info & Recording Controls */}
-          <div className="flex flex-col gap-6 sticky top-24">
-            
-            {/* Course Header Detail Card */}
-            <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4.5 text-left">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-full p-[2px] bg-insta-gradient flex items-center justify-center shrink-0">
-                  <div className="w-full h-full rounded-full bg-white flex items-center justify-center p-[2px]">
-                    <div className="w-full h-full rounded-full flex items-center justify-center text-white font-black text-sm shadow-inner" style={{ backgroundColor: course.color }}>
-                      {course.name.substring(0, 2).toUpperCase()}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-0.5 overflow-hidden">
-                  <h2 className="text-xl font-black text-slate-900 tracking-tight leading-tight">
-                    {course.name}
-                  </h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5 pl-0.5">
-                    {course.professor || t('course.professor.none')} {course.cfu ? `• ${course.cfu} CFU` : ''}
-                  </p>
-                </div>
+          {lectures.length === 0 ? (
+            <div className="bg-white border border-slate-150/80 p-10 sm:p-12 rounded-3xl text-center flex flex-col items-center gap-5 shadow-soft-sm">
+              <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-indigo-50 to-purple-50 flex items-center justify-center text-indigo-600">
+                <Mic className="w-7 h-7 animate-pulse" />
+              </div>
+              <div className="flex flex-col gap-1 max-w-sm mx-auto">
+                <h3 className="font-black text-slate-900 text-base">
+                  Nessuna lezione ancora registrata
+                </h3>
               </div>
 
-              {/* Exam countdown & Milestones (Midterms + Final) */}
-              {course.exam_milestones && course.exam_milestones.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {course.exam_milestones.map((m) => {
-                    if (!m.date) return null
-                    const days = Math.ceil(
-                      (new Date(m.date).getTime() - new Date().setHours(0, 0, 0, 0)) /
-                        (1000 * 60 * 60 * 24)
-                    )
-                    const isMidterm = m.type === 'midterm'
-                    return (
-                      <div
-                        key={m.id}
-                        className={`border p-3 rounded-2xl flex items-center justify-between gap-3 ${
-                          isMidterm
-                            ? 'bg-amber-500/10 border-amber-200/80'
-                            : 'bg-indigo-500/10 border-indigo-200/80'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className={`w-7 h-7 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
-                              isMidterm ? 'bg-amber-500' : 'bg-indigo-600'
-                            }`}
-                          >
-                            <Award className="w-4 h-4" />
-                          </div>
-                          <div className="flex flex-col">
-                            <span
-                              className={`text-[9px] font-black uppercase tracking-wider ${
-                                isMidterm ? 'text-amber-900' : 'text-indigo-900'
-                              }`}
-                            >
-                              {m.name}
-                            </span>
-                            <span className="text-xs font-black text-slate-900">
-                              {new Date(m.date).toLocaleDateString(
-                                language === 'it' ? 'it-IT' : 'en-US',
-                                { day: 'numeric', month: 'short', year: 'numeric' }
-                              )}
-                            </span>
-                          </div>
-                        </div>
-
-                        <span
-                          className={`text-xs font-black px-2.5 py-1 rounded-xl bg-white border shadow-xs ${
-                            isMidterm
-                              ? 'border-amber-200 text-amber-800'
-                              : 'border-indigo-200 text-indigo-800'
-                          }`}
-                        >
-                          {days > 0 ? `-${days} giorni` : days === 0 ? 'Oggi!' : 'Passato'}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : course.exam_date ? (
-                <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-200/80 p-3.5 rounded-2xl flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
-                      <Flame className="w-4 h-4" />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-900">
-                        Appello d'Esame
-                      </span>
-                      <span className="text-xs font-black text-slate-900">
-                        {new Date(course.exam_date).toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US', {
-                          day: 'numeric',
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-
-                  {(() => {
-                    const days = Math.ceil((new Date(course.exam_date).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
-                    return (
-                      <span className="text-xs font-black px-2.5 py-1 rounded-xl bg-white border border-amber-200 text-amber-800 shadow-xs">
-                        {days > 0 ? `-${days} giorni` : days === 0 ? 'Oggi!' : 'Passato'}
-                      </span>
-                    )
-                  })()}
-                </div>
-              ) : null}
-
-              {/* Weekly schedule if set */}
-              {course.schedule && course.schedule.length > 0 && (
-                <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-50">
-                  <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">
-                    Orario Lezioni in Aula
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {course.schedule.map((item, idx) => {
-                      const dayLabels: Record<string, string> = {
-                        monday: 'Lun',
-                        tuesday: 'Mar',
-                        wednesday: 'Mer',
-                        thursday: 'Gio',
-                        friday: 'Ven',
-                        saturday: 'Sab',
-                        sunday: 'Dom',
-                      }
-                      return (
-                        <span
-                          key={idx}
-                          className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 text-[10px] font-bold rounded-xl flex items-center gap-1"
-                        >
-                          <Clock className="w-3 h-3 text-indigo-500" />
-                          <span>{dayLabels[item.day] || item.day} {item.start_time}-{item.end_time}</span>
-                        </span>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-wrap items-center gap-2.5 pt-3 border-t border-slate-50 text-xs text-slate-500 font-semibold pl-0.5">
-                <span className="bg-slate-100/60 text-slate-655 border border-slate-150/40 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide">
-                  {lectures.length === 1 ? t('course.lectureCount.one') : t('course.lectureCount.other', { count: lectures.length })}
-                </span>
-                {totalDuration > 0 && (
-                  <span className="flex items-center gap-1.5 bg-indigo-50/50 text-indigo-650 border border-indigo-100/30 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide">
-                    <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>{t('course.studyDuration', { duration: formatDuration(totalDuration) })}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Syllabus Roadmap Card */}
-            {course.syllabus_topics && course.syllabus_topics.length > 0 ? (
-              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-3.5 text-left">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-indigo-600" />
-                    <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest">
-                      Syllabus & Programma
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="text-[10px] font-black text-indigo-600 hover:underline cursor-pointer"
-                  >
-                    Modifica
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-                  {course.syllabus_topics.map((topic, idx) => (
-                    <div
-                      key={topic.id}
-                      className="bg-slate-50 border border-slate-200/60 p-2.5 rounded-xl flex items-center justify-between text-xs"
-                    >
-                      <span className="font-bold text-slate-700 truncate max-w-[200px]">
-                        {idx + 1}. {topic.title}
-                      </span>
-                      <span className="text-[9px] px-2 py-0.5 bg-white border border-slate-200 text-slate-500 rounded-lg font-extrabold">
-                        Modulo
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/50 border border-indigo-100/90 p-6 rounded-3xl shadow-soft-sm flex flex-col items-center text-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center shadow-soft-xs">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider">
-                    Syllabus & Info Esame
-                  </h4>
-                  <p className="text-[11px] text-slate-500 font-semibold leading-relaxed max-w-[230px]">
-                    Incolla il programma del corso per estrarre con l'AI capitoli, date parziali e criteri d'esame.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsEditModalOpen(true)}
-                  className="w-full bg-brand-gradient hover:opacity-95 text-white font-extrabold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer transition-all hover:scale-[1.01]"
-                >
-                  <Sparkles className="w-3.5 h-3.5 fill-white" />
-                  <span>Configura con AI</span>
-                </button>
-              </div>
-            )}
-
-            {/* Grading Policy & Materials Card (if extracted/set) */}
-            {(course.grading_policy || course.materials_info) && (
-              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-3.5 text-left">
-                <div className="flex items-center gap-2">
-                  <BookmarkCheck className="w-4 h-4 text-indigo-600" />
-                  <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest">
-                    Info Esame & Valutazione
-                  </h3>
-                </div>
-
-                {course.grading_policy && (
-                  <div className="flex flex-col gap-1 bg-slate-50 border border-slate-150/60 p-3 rounded-2xl">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                      Criteri di Valutazione
-                    </span>
-                    <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                      {course.grading_policy}
-                    </p>
-                  </div>
-                )}
-
-                {course.materials_info && (
-                  <div className="flex flex-col gap-1 bg-slate-50 border border-slate-150/60 p-3 rounded-2xl">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                      Materiali & Libri Consigliati
-                    </span>
-                    <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                      {course.materials_info}
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Course Academic Mastery Card */}
-            <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Award className="w-4 h-4 text-amber-500" />
-                  <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest pl-0.5">
-                    Padronanza Materia
-                  </h3>
-                </div>
-                <span className="text-xs font-black text-indigo-650">
-                  {masteryStats.totalCards > 0
-                    ? `${Math.round((masteryStats.knownCards / masteryStats.totalCards) * 100)}%`
-                    : masteryStats.completedLectures > 0 ? '50%' : '0%'}
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                <div
-                  className="bg-brand-gradient h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${
-                      masteryStats.totalCards > 0
-                        ? Math.round((masteryStats.knownCards / masteryStats.totalCards) * 100)
-                        : masteryStats.completedLectures > 0 ? 50 : 0
-                    }%`,
-                  }}
-                />
-              </div>
-
-              <div className="flex flex-col gap-2.5 pt-2 text-xs font-semibold text-slate-600">
-                <div className="flex justify-between items-center">
-                  <span className="flex items-center gap-1.5 text-slate-500">
-                    <Zap className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Flashcard Conosciute</span>
-                  </span>
-                  <span className="font-extrabold text-slate-900">
-                    {masteryStats.knownCards}/{masteryStats.totalCards}
-                  </span>
-                </div>
-
-                {masteryStats.unknownCards > 0 && (
-                  <div className="flex justify-between items-center text-amber-700 bg-amber-50/70 p-2 rounded-xl border border-amber-200/60">
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold">
-                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Punti Critici da Rivedere</span>
-                    </span>
-                    <span className="font-extrabold text-xs">
-                      {masteryStats.unknownCards}
-                    </span>
-                  </div>
-                )}
-
-                <div className="flex justify-between items-center border-t border-slate-50 pt-2">
-                  <span className="flex items-center gap-1.5 text-slate-500">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500" />
-                    <span>Lezioni Pronte</span>
-                  </span>
-                  <span className="font-extrabold text-slate-900">
-                    {masteryStats.completedLectures}/{lectures.length}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Recording Action button */}
-            {usage?.isExceeded && usage?.plan === 'free' ? (
-              <div className="w-full bg-amber-50/60 border border-amber-200/80 p-5 rounded-3xl flex flex-col items-center text-center gap-3.5 shadow-soft-sm">
-                <AlertCircle className="w-8 h-8 text-amber-500 animate-pulse" />
-                <div className="flex flex-col gap-1">
-                  <h3 className="font-extrabold text-sm text-slate-800">
-                    {t('course.usageLimit.title', { used: usage.used, limit: usage.limit })}
-                  </h3>
-                  <p className="text-xs text-slate-500 max-w-xs font-medium leading-normal">
-                    {t('course.usageLimit.description')}
-                  </p>
-                </div>
-                <Link
-                  href="/profile"
-                  className="bg-brand-gradient hover:opacity-95 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md shadow-indigo-100 transition-all cursor-pointer hover:scale-[1.01]"
-                >
-                  {t('profile.plan.upgrade')}
-                </Link>
-              </div>
-            ) : (
               <Link
                 href={`/course/${course.id}/record`}
-                className="w-full py-5 bg-brand-gradient hover:opacity-95 text-white font-extrabold rounded-3xl shadow-md shadow-indigo-150 hover:shadow-lg transition-all duration-250 flex flex-col items-center justify-center gap-1.5 group text-center cursor-pointer hover:scale-[1.01]"
+                className="bg-brand-gradient text-white font-extrabold text-xs py-3 px-6 rounded-2xl flex items-center gap-2 cursor-pointer"
               >
-                <Mic className="w-6 h-6 animate-pulse group-hover:scale-110 transition-transform duration-200" />
-                <span className="text-base uppercase tracking-wider">{t('course.recordButton')}</span>
+                <Mic className="w-4 h-4" />
+                <span>Avvia Prima Registrazione</span>
               </Link>
-            )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3.5">
+              {lectures.map((lecture) => (
+                <div
+                  key={lecture.id}
+                  className="group bg-white border border-slate-150/70 rounded-2xl p-4 sm:p-5 shadow-soft-sm hover:border-slate-300 transition-all flex items-center justify-between gap-4"
+                >
+                  <Link
+                    href={`/lecture/${lecture.id}`}
+                    className="flex items-center gap-3.5 grow overflow-hidden cursor-pointer"
+                  >
+                    <div className="w-11 h-11 shrink-0 rounded-2xl bg-indigo-50 border flex items-center justify-center text-indigo-600">
+                      <FileAudio className="w-5 h-5" />
+                    </div>
 
+                    <div className="flex flex-col gap-0.5 grow overflow-hidden text-left">
+                      <h4 className="font-extrabold text-slate-900 group-hover:text-indigo-650 text-sm truncate">
+                        {lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })}
+                      </h4>
+                      <div className="flex items-center gap-2.5 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatRecordedDate(lecture.recorded_at, lecture.created_at)}
+                        </span>
+                        {lecture.duration_seconds ? (
+                          <span className="flex items-center gap-1 border-l pl-2.5">
+                            <Clock className="w-3 h-3" />
+                            {formatDuration(lecture.duration_seconds)}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </Link>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-[10px] font-extrabold px-3 py-1 rounded-full border ${getStatusBadgeStyles(lecture.status)}`}>
+                      {getStatusLabel(lecture.status)}
+                    </span>
+
+                    {['queued', 'processing'].includes(lecture.status) ? (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleCancelAndSoftDeleteLecture(
+                            lecture.id,
+                            lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })
+                          )
+                        }}
+                        className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-650 rounded-xl cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5 stroke-[3]" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleSoftDeleteLecture(
+                            lecture.id,
+                            lecture.title || t('course.lecture.defaultTitle', { date: formatRecordedDate(lecture.recorded_at, lecture.created_at) })
+                          )
+                        }}
+                        className="p-2 bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-xl cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white border border-slate-150/80 p-5 sm:p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Award className="w-4 h-4 text-amber-500" />
+              <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest">
+                Padronanza della Materia
+              </h3>
+            </div>
+            <span className="text-xs font-black text-amber-600">
+              {masteryStats.totalCards > 0
+                ? `${Math.round((masteryStats.knownCards / masteryStats.totalCards) * 100)}%`
+                : '0%'}
+            </span>
           </div>
 
-        </div>
+          <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+            <div
+              className="bg-amber-500 h-2 rounded-full"
+              style={{
+                width: `${
+                  masteryStats.totalCards > 0
+                    ? Math.round((masteryStats.knownCards / masteryStats.totalCards) * 100)
+                    : 0
+                }%`,
+              }}
+            />
+          </div>
+        </section>
       </main>
+
+      <BottomNav />
+
+      <SyllabusDrawerModal
+        isOpen={isSyllabusDrawerOpen}
+        onClose={() => setIsSyllabusDrawerOpen(false)}
+        onOpenEdit={() => setIsEditModalOpen(true)}
+        courseName={course.name}
+        courseColor={course.color}
+        professor={course.professor}
+        cfu={course.cfu}
+        syllabusTopics={course.syllabus_topics}
+        examMilestones={course.exam_milestones}
+        examDate={course.exam_date}
+        gradingPolicy={course.grading_policy}
+        materialsInfo={course.materials_info}
+      />
 
       <CourseModal
         isOpen={isEditModalOpen}
@@ -959,9 +737,6 @@ export default function CourseDetailPage() {
           onClose={() => setToastMessage(null)}
         />
       )}
-
-      {/* Navigation tabs */}
-      <BottomNav />
     </div>
   )
 }
