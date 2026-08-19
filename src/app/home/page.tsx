@@ -484,9 +484,9 @@ export default function HomePage() {
 
                       {/* Bottom Action Checklist Pill */}
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-50 text-xs text-slate-500 font-medium">
-                        {item.hasSummary && (
+                        {(item.hasSummary || item.taskType === 'summary') && (
                           <Link
-                            href={`/lecture/${item.lectureId}?tab=summary`}
+                            href={`/lecture/${item.lectureId}?mode=guided&tab=summary`}
                             className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 hover:bg-slate-100 rounded-xl text-[11px] font-bold text-slate-700 transition-colors"
                           >
                             <BookOpen className="w-3.5 h-3.5 text-indigo-500" />

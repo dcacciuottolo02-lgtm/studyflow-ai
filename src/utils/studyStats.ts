@@ -262,9 +262,24 @@ export function buildMultiCourseTodayQueue(
 
     const courseInfo = (Array.isArray(lecture.courses) ? lecture.courses[0] : lecture.courses) || {}
     const sm = studyMaterialsMap[lecture.id]
-    const flashcardsList = (sm?.flashcard_sets?.[0]?.flashcards as any[]) || []
-    const quizzesList = (sm?.quiz_sets?.[0]?.quiz_questions as any[]) || []
-    const hasSummary = Boolean(sm?.summaries && sm.summaries.length > 0)
+    const flashcardSets = Array.isArray(sm?.flashcard_sets)
+      ? sm.flashcard_sets
+      : sm?.flashcard_sets
+      ? [sm.flashcard_sets]
+      : []
+    const quizSets = Array.isArray(sm?.quiz_sets)
+      ? sm.quiz_sets
+      : sm?.quiz_sets
+      ? [sm.quiz_sets]
+      : []
+    const flashcardsList = (flashcardSets[0]?.flashcards as any[]) || []
+    const quizzesList = (quizSets[0]?.quiz_questions as any[]) || []
+    const hasSummary = Boolean(
+      sm?.summaries &&
+        (Array.isArray(sm.summaries)
+          ? sm.summaries.length > 0
+          : Boolean(sm.summaries?.id || sm.summaries))
+    )
     const hasFlashcards = flashcardsList.length > 0
     const hasQuiz = quizzesList.length > 0
 
