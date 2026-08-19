@@ -24,6 +24,9 @@ import {
   Trash2,
   Clock,
   Sparkles,
+  Paperclip,
+  BookOpen,
+  FileText,
 } from 'lucide-react'
 
 // Maximum recording duration: 1 hour (3,600 seconds)
@@ -34,6 +37,11 @@ function RecordLectureContent() {
   const router = useRouter()
   const courseId = params.id as string
   const { t, language } = useLanguage()
+
+  // Course & Syllabus & Slides state
+  const [course, setCourse] = useState<{ id: string; name: string; syllabus_topics?: { id: string; title: string; order_index: number }[] } | null>(null)
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('')
+  const [slidesFile, setSlidesFile] = useState<File | null>(null)
 
   // Global UI states
   const [mode, setMode] = useState<'choose' | 'record' | 'upload'>('choose')
@@ -48,6 +56,25 @@ function RecordLectureContent() {
       setContentLanguage(language)
     }
   }, [language])
+
+  // Fetch course info & syllabus topics
+  useEffect(() => {
+    async function fetchCourseInfo() {
+      if (!courseId) return
+      try {
+        const supabase = createClient()
+        const { data } = await supabase
+          .from('courses')
+          .select('id, name, syllabus_topics')
+          .eq('id', courseId)
+          .maybeSingle()
+        if (data) setCourse(data)
+      } catch (err) {
+        console.warn('Failed to load course for recording:', err)
+      }
+    }
+    fetchCourseInfo()
+  }, [courseId])
 
   const [error, setError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -318,24 +345,65 @@ function RecordLectureContent() {
         return
       }
 
+      // Optional slides upload
+      let slidesUrl: string | null = null
+      let slidesName: string | null = null
+
+      if (slidesFile) {
+        setUploadStatusText('Caricamento slide del docente...')
+        const cleanName = slidesFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const slidesPath = `${user.id}/${courseId}/slides_${Date.now()}_${cleanName}`
+        const { error: slideUpErr } = await supabase.storage
+          .from('lecture-resources')
+          .upload(slidesPath, slidesFile, { upsert: true })
+
+        if (!slideUpErr) {
+          slidesUrl = `lecture-resources/${slidesPath}`
+          slidesName = slidesFile.name
+        }
+      }
+
       // 1. Insert Lecture record in database with status 'uploading'
       setUploadStatusText(t('record.status.creating'))
       const rawTitle = topic.trim() || t('course.lecture.defaultTitle', { date: new Date().toLocaleDateString(language === 'it' ? 'it-IT' : 'en-US') })
-      const { data: lectureData, error: insertError } = await supabase
+      
+      const payload: any = {
+        course_id: courseId,
+        title: rawTitle,
+        status: 'uploading',
+        duration_seconds: durationSecs > 0 ? durationSecs : null,
+        recorded_at: new Date().toISOString(),
+        content_language: contentLanguage,
+      }
+      if (selectedTopicId) payload.syllabus_topic_id = selectedTopicId
+      if (slidesUrl) payload.slides_url = slidesUrl
+      if (slidesName) payload.slides_name = slidesName
+
+      let { data: lectureData, error: insertError } = await supabase
         .from('lectures')
-        .insert({
+        .insert(payload)
+        .select('id')
+        .single()
+
+      if (insertError || !lectureData) {
+        const basePayload = {
           course_id: courseId,
           title: rawTitle,
           status: 'uploading',
           duration_seconds: durationSecs > 0 ? durationSecs : null,
           recorded_at: new Date().toISOString(),
           content_language: contentLanguage,
-        })
-        .select('id')
-        .single()
+        }
+        const { data: baseLec, error: baseErr } = await supabase
+          .from('lectures')
+          .insert(basePayload)
+          .select('id')
+          .single()
 
-      if (insertError || !lectureData) {
-        throw new Error(t('record.error.dbSaveLecture'))
+        if (baseErr || !baseLec) {
+          throw new Error(t('record.error.dbSaveLecture'))
+        }
+        lectureData = baseLec
       }
 
       const lectureId = lectureData.id
@@ -532,7 +600,7 @@ function RecordLectureContent() {
         </div>
       )}
 
-      {/* Form Fields: Topic Topic Input */}
+      {/* Form Fields: Topic Input */}
       <div className="flex flex-col gap-1.5 pl-0.5">
         <label className="text-[10px] font-extrabold text-slate-455 uppercase tracking-widest">
           {t('record.form.label.topic')}
@@ -545,6 +613,77 @@ function RecordLectureContent() {
           placeholder={t('record.form.placeholder.topic')}
           className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-2xl text-slate-800 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900 focus:border-slate-900 transition-all duration-200 font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
         />
+      </div>
+
+      {/* Syllabus Topic Selector (if course has syllabus topics) */}
+      {course?.syllabus_topics && course.syllabus_topics.length > 0 && (
+        <div className="flex flex-col gap-1.5 pl-0.5">
+          <label className="text-[10px] font-extrabold text-slate-455 uppercase tracking-widest flex items-center gap-1">
+            <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
+            <span>Capitolo / Modulo del Syllabus (Opzionale)</span>
+          </label>
+          <select
+            value={selectedTopicId}
+            disabled={recordingState !== 'idle' || uploading}
+            onChange={(e) => setSelectedTopicId(e.target.value)}
+            className="w-full bg-white border border-slate-200 px-4 py-2.5 rounded-2xl text-slate-800 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all cursor-pointer disabled:opacity-60"
+          >
+            <option value="">Nessun capitolo specifico</option>
+            {course.syllabus_topics.map((t, idx) => (
+              <option key={t.id} value={t.id}>
+                {idx + 1}. {t.title}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Professor Slides Attachment Box */}
+      <div className="flex flex-col gap-1.5 pl-0.5">
+        <label className="text-[10px] font-extrabold text-slate-455 uppercase tracking-widest flex items-center gap-1">
+          <Paperclip className="w-3.5 h-3.5 text-indigo-500" />
+          <span>Slide del Professore (PDF / PPT / PPTX) (Opzionale)</span>
+        </label>
+        
+        {slidesFile ? (
+          <div className="flex items-center justify-between p-3 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+              <div className="flex flex-col truncate text-left">
+                <span className="text-xs font-bold text-slate-800 truncate">
+                  {slidesFile.name}
+                </span>
+                <span className="text-[10px] text-slate-400 font-semibold">
+                  {(slidesFile.size / (1024 * 1024)).toFixed(1)} MB
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={recordingState !== 'idle' || uploading}
+              onClick={() => setSlidesFile(null)}
+              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <label className="flex items-center justify-center gap-2 p-3 bg-white border border-dashed border-slate-300 hover:border-slate-400 rounded-2xl cursor-pointer text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all">
+            <Upload className="w-4 h-4 text-slate-400" />
+            <span>Allega file slide (.pdf, .ppt, .pptx)</span>
+            <input
+              type="file"
+              accept=".pdf,.ppt,.pptx,.doc,.docx"
+              disabled={recordingState !== 'idle' || uploading}
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  setSlidesFile(e.target.files[0])
+                }
+              }}
+              className="hidden"
+            />
+          </label>
+        )}
       </div>
 
       {/* AI Modules Selection */}

@@ -39,6 +39,7 @@ import {
   Download,
   Clock,
   Trash2,
+  Paperclip,
 } from 'lucide-react'
 
 interface Lecture {
@@ -52,6 +53,10 @@ interface Lecture {
   created_at: string
   duration_seconds?: number | null
   content_language?: 'it' | 'en' | null
+  syllabus_topic_id?: string | null
+  syllabus_topic_title?: string | null
+  slides_url?: string | null
+  slides_name?: string | null
 }
 
 interface AIJob {
@@ -262,26 +267,45 @@ export default function StudyHubPage() {
 
       console.log('[StudyHub] Loading lecture with ID:', lectureId)
 
-      // Fetch Lecture details joining workspace name
-      const { data: lectureData, error: lError } = await supabase
+      // Fetch Lecture details joining course and syllabus topics (with fallback)
+      let lectureData: any = null
+      const { data: fullLec, error: lError } = await supabase
         .from('lectures')
         .select(`
-          id, title, status, transcript_text, recorded_at, created_at, course_id, duration_seconds, content_language,
-          courses ( name )
+          id, title, status, transcript_text, recorded_at, created_at, course_id, duration_seconds, content_language, syllabus_topic_id, slides_url, slides_name,
+          courses ( name, syllabus_topics )
         `)
         .eq('id', lectureId)
         .is('deleted_at', null)
         .maybeSingle()
 
-      if (lError || !lectureData) {
-        console.error('[StudyHub] Error or empty lectureData:', lError, lectureData)
-        setError('Lezione non trovata o eliminata.')
-        setLoading(false)
-        return
+      if (!lError && fullLec) {
+        lectureData = fullLec
+      } else {
+        const { data: baseLec, error: baseErr } = await supabase
+          .from('lectures')
+          .select(`
+            id, title, status, transcript_text, recorded_at, created_at, course_id, duration_seconds, content_language,
+            courses ( name )
+          `)
+          .eq('id', lectureId)
+          .is('deleted_at', null)
+          .maybeSingle()
+
+        if (baseErr || !baseLec) {
+          console.error('[StudyHub] Error or empty lectureData:', baseErr, baseLec)
+          setError('Lezione non trovata o eliminata.')
+          setLoading(false)
+          return
+        }
+        lectureData = baseLec
       }
 
       const rawCourse = lectureData.courses as any
       const courseName = rawCourse?.name || 'Corso'
+      const topicsList = (rawCourse?.syllabus_topics as any[]) || []
+      const matchedTopic = topicsList.find((t: any) => t.id === lectureData.syllabus_topic_id)
+      const syllabusTopicTitle = matchedTopic?.title || null
 
       setLecture({
         id: lectureData.id,
@@ -294,6 +318,10 @@ export default function StudyHubPage() {
         created_at: lectureData.created_at,
         duration_seconds: (lectureData as any).duration_seconds,
         content_language: (lectureData as any).content_language || 'it',
+        syllabus_topic_id: lectureData.syllabus_topic_id || null,
+        syllabus_topic_title: syllabusTopicTitle,
+        slides_url: lectureData.slides_url || null,
+        slides_name: lectureData.slides_name || null,
       })
 
       // Fetch AI jobs status
@@ -819,6 +847,29 @@ export default function StudyHubPage() {
 
   const isFailedPipeline = lecture.status === 'failed' || jobs.every((j) => j.status === 'failed')
 
+  const handleDownloadSlides = async () => {
+    if (!lecture?.slides_url) return
+    try {
+      const supabase = createClient()
+      const bucketName = 'lecture-resources'
+      const filePath = lecture.slides_url.startsWith(`${bucketName}/`)
+        ? lecture.slides_url.substring(bucketName.length + 1)
+        : lecture.slides_url
+
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .createSignedUrl(filePath, 3600)
+
+      if (error || !data?.signedUrl) {
+        throw new Error('Impossibile generare link per il download delle slide.')
+      }
+
+      window.open(data.signedUrl, '_blank')
+    } catch (err: any) {
+      alert(err.message || 'Errore nel download delle slide')
+    }
+  }
+
   return (    <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 transition-colors duration-300">
       
       {/* 1. Header Navigation */}
@@ -874,6 +925,29 @@ export default function StudyHubPage() {
                    <span>{t('hub.info.course')}</span>
                    <span className="font-extrabold text-slate-800 truncate max-w-[140px]">{lecture.course_name}</span>
                  </div>
+
+                 {lecture.syllabus_topic_title && (
+                   <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
+                     <span>Capitolo</span>
+                     <span className="font-extrabold text-indigo-600 truncate max-w-[140px]" title={lecture.syllabus_topic_title}>
+                       {lecture.syllabus_topic_title}
+                     </span>
+                   </div>
+                 )}
+
+                 {lecture.slides_url && (
+                   <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
+                     <span>Slide Docente</span>
+                     <button
+                       type="button"
+                       onClick={handleDownloadSlides}
+                       className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-xl border border-indigo-200/60 transition-colors cursor-pointer"
+                     >
+                       <Paperclip className="w-3 h-3 text-indigo-600" />
+                       <span className="truncate max-w-[100px]">{lecture.slides_name || 'Scarica Slide'}</span>
+                     </button>
+                   </div>
+                 )}
                  
                  {/* Re-process button */}
                  <div className="border-t border-slate-50 pt-3.5 mt-1">
