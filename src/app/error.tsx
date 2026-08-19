@@ -1,5 +1,3 @@
-'use strict'
-
 'use client'
 
 import { useEffect } from 'react'
@@ -15,7 +13,27 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error('[Global Error Boundary Caught]:', error)
+
+    // Check if error is due to a new Vercel deployment chunk mismatch (ChunkLoadError)
+    const isChunkError =
+      error?.message?.includes('Failed to load chunk') ||
+      error?.message?.includes('Loading chunk') ||
+      error?.name === 'ChunkLoadError'
+
+    if (isChunkError) {
+      const hasAutoReloaded = sessionStorage.getItem('studyflow_chunk_error_reloaded')
+      if (!hasAutoReloaded) {
+        sessionStorage.setItem('studyflow_chunk_error_reloaded', 'true')
+        window.location.reload()
+      }
+    }
   }, [error])
+
+  const handleRetry = () => {
+    sessionStorage.removeItem('studyflow_chunk_error_reloaded')
+    // Hard refresh to fetch the latest production bundles
+    window.location.reload()
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
@@ -26,20 +44,20 @@ export default function GlobalError({
 
         <div className="flex flex-col gap-1.5 text-center">
           <h2 className="text-xl font-black text-slate-900">
-            Si è verificato un errore
+            Nuova versione disponibile
           </h2>
           <p className="text-xs text-slate-500 font-semibold leading-relaxed">
-            {error?.message || 'Si è verificato un problema durante il caricamento della pagina.'}
+            È stata rilasciata una nuova versione di StudyFlow. Ricarica la pagina per sincronizzare l'app.
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full mt-2">
           <button
-            onClick={() => reset()}
+            onClick={handleRetry}
             className="w-full bg-brand-gradient hover:opacity-95 text-white font-extrabold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-100 transition-all cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
-            <span>Riprova</span>
+            <span>Ricarica Ora</span>
           </button>
 
           <Link
