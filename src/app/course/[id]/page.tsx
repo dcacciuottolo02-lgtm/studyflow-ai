@@ -8,6 +8,7 @@ import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import CourseModal, { ScheduleItem, SyllabusTopic, ExamMilestone } from '@/components/CourseModal'
 import SyllabusModal from '@/components/SyllabusModal'
+import CourseArchiveModal from '@/components/CourseArchiveModal'
 import BottomNav from '@/components/BottomNav'
 import Toast from '@/components/Toast'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
@@ -79,6 +80,7 @@ export default function CourseDetailPage() {
   const [showDropdown, setShowDropdown] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isSyllabusModalOpen, setIsSyllabusModalOpen] = useState(false)
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info')
   const [error, setError] = useState<string | null>(null)
@@ -741,6 +743,34 @@ export default function CourseDetailPage() {
               </div>
             </div>
 
+            {/* Master Course Archive Trigger Button */}
+            <button
+              onClick={() => setIsArchiveModalOpen(true)}
+              className="w-full bg-gradient-to-r from-indigo-50/80 via-purple-50/40 to-white hover:bg-slate-50/90 border border-indigo-150 p-5 rounded-3xl shadow-soft-sm flex items-center justify-between gap-4 transition-all duration-200 hover:border-indigo-300 group cursor-pointer text-left hover:scale-[1.01]"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0 group-hover:scale-105 transition-transform">
+                  <Zap className="w-5 h-5 fill-white" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-black text-slate-900 group-hover:text-indigo-650 transition-colors truncate">
+                      Archivio Flashcard & Quiz
+                    </span>
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                  </div>
+                  <span className="text-xs text-slate-500 font-semibold truncate mt-0.5">
+                    {masteryStats.totalCards > 0
+                      ? `${masteryStats.knownCards}/${masteryStats.totalCards} note • Ripeti tutto il corso`
+                      : 'Ripeti tutte le flashcard e i quiz'}
+                  </span>
+                </div>
+              </div>
+              <div className="w-8 h-8 rounded-xl bg-white border border-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-50 transition-all shrink-0">
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+
             {/* Syllabus & Exam Info Pop-up Trigger Button */}
             <button
               onClick={() => setIsSyllabusModalOpen(true)}
@@ -882,6 +912,16 @@ export default function CourseDetailPage() {
         examDate={course.exam_date}
         gradingPolicy={course.grading_policy}
         materialsInfo={course.materials_info}
+      />
+
+      {/* Course Master Archive Modal */}
+      <CourseArchiveModal
+        isOpen={isArchiveModalOpen}
+        onClose={() => setIsArchiveModalOpen(false)}
+        courseId={course.id}
+        courseName={course.name}
+        courseColor={course.color}
+        onUpdateMastery={fetchCourseAndLectures}
       />
 
       {/* Course Edit/Create Modal */}
