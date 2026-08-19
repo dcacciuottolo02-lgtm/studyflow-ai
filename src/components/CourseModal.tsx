@@ -264,8 +264,44 @@ export default function CourseModal({
     )
   }
 
+  const handleFormKeyDown = (e: React.KeyboardEvent<HTMLFormElement>) => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName === 'INPUT') {
+      const targetInput = e.target as HTMLInputElement
+      if (targetInput.placeholder?.includes('singolo capitolo')) {
+        return
+      }
+      e.preventDefault()
+      if (activeTab === 'info') {
+        if (!name.trim() || name.trim().length < 2) {
+          setError(t('courseModal.error.nameLength'))
+          return
+        }
+        setError(null)
+        setActiveTab('schedule')
+      } else if (activeTab === 'schedule') {
+        setError(null)
+        setActiveTab('syllabus')
+      }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (activeTab !== 'syllabus') {
+      if (activeTab === 'info') {
+        if (!name.trim() || name.trim().length < 2) {
+          setError(t('courseModal.error.nameLength'))
+          return
+        }
+        setError(null)
+        setActiveTab('schedule')
+      } else if (activeTab === 'schedule') {
+        setError(null)
+        setActiveTab('syllabus')
+      }
+      return
+    }
+
     if (!name.trim() || name.trim().length < 2) {
       setError(t('courseModal.error.nameLength'))
       setActiveTab('info')
@@ -474,7 +510,11 @@ export default function CourseModal({
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4.5 text-left">
+        <form
+          onSubmit={handleSubmit}
+          onKeyDown={handleFormKeyDown}
+          className="flex flex-col gap-4.5 text-left"
+        >
           
           {/* TAB 1: INFO BASE */}
           {activeTab === 'info' && (
@@ -851,26 +891,53 @@ export default function CourseModal({
             {activeTab !== 'info' && (
               <button
                 type="button"
-                onClick={() =>
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setError(null)
                   setActiveTab(activeTab === 'syllabus' ? 'schedule' : 'info')
-                }
+                }}
                 className="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold rounded-2xl text-xs transition-all cursor-pointer"
               >
                 Indietro
               </button>
             )}
 
-            {activeTab !== 'syllabus' ? (
+            {activeTab === 'info' && (
               <button
                 type="button"
-                onClick={() =>
-                  setActiveTab(activeTab === 'info' ? 'schedule' : 'syllabus')
-                }
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (!name.trim() || name.trim().length < 2) {
+                    setError(t('courseModal.error.nameLength'))
+                    return
+                  }
+                  setError(null)
+                  setActiveTab('schedule')
+                }}
                 className="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs shadow-md transition-all cursor-pointer text-center"
               >
-                Avanti ({activeTab === 'info' ? 'Orario Lezioni' : 'Syllabus & Esami'})
+                Avanti (Orario Lezioni)
               </button>
-            ) : (
+            )}
+
+            {activeTab === 'schedule' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setError(null)
+                  setActiveTab('syllabus')
+                }}
+                className="flex-1 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold rounded-2xl text-xs shadow-md transition-all cursor-pointer text-center"
+              >
+                Avanti (Syllabus & Esami)
+              </button>
+            )}
+
+            {activeTab === 'syllabus' && (
               <button
                 type="submit"
                 disabled={loading}
