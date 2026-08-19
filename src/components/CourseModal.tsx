@@ -309,10 +309,25 @@ export default function CourseModal({
 
       if (isEdit) {
         // Edit flow
-        const { error: updateError } = await supabase
+        let { error: updateError } = await supabase
           .from('courses')
           .update(payload)
           .eq('id', initialData.id)
+
+        if (updateError) {
+          // Fallback to base fields if new columns are not yet applied in DB
+          const basePayload = {
+            name: name.trim(),
+            professor: professor.trim() || null,
+            color: selectedColor,
+          }
+          const { error: baseUpdateErr } = await supabase
+            .from('courses')
+            .update(basePayload)
+            .eq('id', initialData.id)
+
+          updateError = baseUpdateErr
+        }
 
         if (updateError) {
           setError(t('courseModal.error.update'))
@@ -352,11 +367,24 @@ export default function CourseModal({
           }
         }
 
-        const { error: insertError } = await supabase.from('courses').insert({
+        let { error: insertError } = await supabase.from('courses').insert({
           workspace_id: workspace.id,
           ...payload,
           status: 'active',
         })
+
+        if (insertError) {
+          // Fallback to base fields
+          const basePayload = {
+            workspace_id: workspace.id,
+            name: name.trim(),
+            professor: professor.trim() || null,
+            color: selectedColor,
+            status: 'active',
+          }
+          const { error: baseInsertErr } = await supabase.from('courses').insert(basePayload)
+          insertError = baseInsertErr
+        }
 
         if (insertError) {
           setError(t('courseModal.error.create'))

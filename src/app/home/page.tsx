@@ -142,8 +142,9 @@ export default function HomePage() {
         .maybeSingle()
 
       if (workspace) {
-        // 5. Fetch active courses in workspace
-        const { data: coursesData } = await supabase
+        // 5. Fetch active courses in workspace (with resilient fallback for new columns)
+        let coursesData: any[] | null = null
+        const { data: fullCourses, error: fullError } = await supabase
           .from('courses')
           .select(`
             id, name, professor, color, created_at, exam_date, cfu, schedule, syllabus_topics,
@@ -152,6 +153,23 @@ export default function HomePage() {
           .eq('workspace_id', workspace.id)
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
+
+        if (!fullError && fullCourses) {
+          coursesData = fullCourses
+        } else {
+          // Fallback if newly added columns are not yet applied in Supabase
+          const { data: baseCourses } = await supabase
+            .from('courses')
+            .select(`
+              id, name, professor, color, created_at,
+              lectures:lectures(id, deleted_at)
+            `)
+            .eq('workspace_id', workspace.id)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+
+          coursesData = baseCourses
+        }
 
         if (coursesData) {
           setCourses(coursesData as any[])

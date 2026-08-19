@@ -92,18 +92,31 @@ export default function CourseDetailPage() {
         return
       }
 
-      // 1. Fetch course details
-      const { data: courseData, error: courseFetchError } = await supabase
+      // 1. Fetch course details (with fallback for optional new columns)
+      let courseData: any = null
+      const { data: fullCourse, error: courseFetchError } = await supabase
         .from('courses')
         .select('id, name, professor, color, status, cfu, exam_date, schedule, syllabus_topics, syllabus_text, exam_milestones, deleted_at')
         .eq('id', courseId)
         .is('deleted_at', null)
         .maybeSingle()
 
-      if (courseFetchError || !courseData) {
-        setError(t('course.error.notFound'))
-        setLoading(false)
-        return
+      if (!courseFetchError && fullCourse) {
+        courseData = fullCourse
+      } else {
+        const { data: baseCourse, error: baseErr } = await supabase
+          .from('courses')
+          .select('id, name, professor, color, status, deleted_at')
+          .eq('id', courseId)
+          .is('deleted_at', null)
+          .maybeSingle()
+
+        if (baseErr || !baseCourse) {
+          setError(t('course.error.notFound'))
+          setLoading(false)
+          return
+        }
+        courseData = baseCourse
       }
 
       setCourse(courseData)
