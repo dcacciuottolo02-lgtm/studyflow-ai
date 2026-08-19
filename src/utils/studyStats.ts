@@ -216,6 +216,38 @@ export async function recordStudyActivity(
 }
 
 /**
+ * Mark a lecture task as completed for today
+ */
+export function markLectureCompletedToday(userId: string, lectureId: string): void {
+  if (typeof window === 'undefined' || !userId || !lectureId) return
+  const todayStr = getLocalDateString()
+  const storageKey = `studyflow_completed_tasks_${userId}_${todayStr}`
+  try {
+    const raw = localStorage.getItem(storageKey)
+    const set = new Set<string>(raw ? JSON.parse(raw) : [])
+    set.add(lectureId)
+    localStorage.setItem(storageKey, JSON.stringify(Array.from(set)))
+  } catch (e) {
+    console.error('[StudyStats] Error saving completed task:', e)
+  }
+}
+
+/**
+ * Get all lecture IDs completed for today
+ */
+export function getCompletedLecturesToday(userId: string): string[] {
+  if (typeof window === 'undefined' || !userId) return []
+  const todayStr = getLocalDateString()
+  const storageKey = `studyflow_completed_tasks_${userId}_${todayStr}`
+  try {
+    const raw = localStorage.getItem(storageKey)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+/**
  * Multi-Course Urgency & Priority Algorithm (Ebbinghaus Spaced Repetition + Weak Points)
  */
 export function buildMultiCourseTodayQueue(

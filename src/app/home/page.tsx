@@ -9,6 +9,7 @@ import { createClient } from '@/utils/supabase/client'
 import {
   getOrCreateUserStats,
   buildMultiCourseTodayQueue,
+  getCompletedLecturesToday,
   UserStudyStats,
   TodayTaskItem,
 } from '@/utils/studyStats'
@@ -227,7 +228,10 @@ export default function HomePage() {
           })
 
           // Calculate Multi-Course Ebbinghaus Priority Queue
-          const calculatedQueue = buildMultiCourseTodayQueue(lecturesData, smMap)
+          const completedToday = getCompletedLecturesToday(user.id)
+          const calculatedQueue = buildMultiCourseTodayQueue(lecturesData, smMap).filter(
+            (item) => !completedToday.includes(item.lectureId)
+          )
           setQueueItems(calculatedQueue)
 
           // 8. Find weak flashcards count
@@ -470,7 +474,7 @@ export default function HomePage() {
 
                         {/* CTA Link */}
                         <Link
-                          href={`/lecture/${item.lectureId}?tab=${item.targetTab}`}
+                          href={`/lecture/${item.lectureId}?mode=guided&tab=${item.targetTab || 'summary'}`}
                           className="inline-flex items-center justify-center gap-2 bg-brand-gradient hover:opacity-95 text-white font-extrabold px-4.5 py-2.5 rounded-2xl text-xs shadow-md shadow-indigo-50 transition-all cursor-pointer hover:scale-105 shrink-0 self-start sm:self-auto"
                         >
                           <span>{t('home.today.queue.startSession')}</span>

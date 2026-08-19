@@ -10,7 +10,7 @@ import remarkGfm from 'remark-gfm'
 import { createClient } from '@/utils/supabase/client'
 import { useLanguage } from '@/contexts/LanguageContext'
 import { exportToWord } from '@/utils/wordExport'
-import { recordStudyActivity } from '@/utils/studyStats'
+import { recordStudyActivity, markLectureCompletedToday } from '@/utils/studyStats'
 import BottomNav from '@/components/BottomNav'
 import {
   ArrowLeft,
@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle,
+  CheckCircle2,
   HelpCircle as HelpIcon,
   BookOpen,
   Check,
@@ -41,6 +42,10 @@ import {
   Trash2,
   Paperclip,
   Upload,
+  Trophy,
+  ArrowRight,
+  Target,
+  Zap,
 } from 'lucide-react'
 
 interface Lecture {
@@ -184,6 +189,10 @@ function StudyHubContent() {
   // Generating single module status
   const [generatingModule, setGeneratingModule] = useState<string | null>(null)
   const [uploadingSlide, setUploadingSlide] = useState(false)
+
+  // Guided Study Mode states
+  const isGuidedMode = searchParams.get('mode') === 'guided'
+  const [showGuidedCelebration, setShowGuidedCelebration] = useState(false)
 
   const isSummaryRequested = jobs.some((j) => j.job_type === 'summary')
   const isFlashcardsRequested = jobs.some((j) => j.job_type === 'flashcards')
@@ -667,6 +676,9 @@ function StudyHubContent() {
         recordStudyActivity(supabase, user.id, 'quiz', quizQuestions.length).catch((err) =>
           console.error('[StudyStats Quiz Record Error]:', err)
         )
+        // Mark lecture completed today so task disappears from Home
+        markLectureCompletedToday(user.id, lectureId)
+        setShowGuidedCelebration(true)
       }
     } catch (err) {
       console.error('[StudyStats Quiz Catch Error]:', err)
@@ -1228,6 +1240,73 @@ function StudyHubContent() {
               </div>
             )}
 
+            {/* Guided Study Step Banner */}
+            {isGuidedMode && (
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-3xl shadow-xl shadow-indigo-950/15 border border-white/15 text-left relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 shrink-0">
+                      <Target className="w-5 h-5 animate-pulse text-indigo-300" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-indigo-300">
+                        Sessione di Studio Guidata
+                      </span>
+                      <span className="text-sm font-black text-white">
+                        {activeTab === 'summary' && 'Fase 1 di 3: Fissa i Concetti Chiave & Riassunto'}
+                        {activeTab === 'flashcards' && 'Fase 2 di 3: Allena la Memoria Attiva (Flashcard)'}
+                        {activeTab === 'quiz' && 'Fase 3 di 3: Test Finale di Ritenzione (Quiz)'}
+                        {!['summary', 'flashcards', 'quiz'].includes(activeTab) && 'Studio Guidato in Corso'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Step Buttons */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => {
+                        setIsFlipped(false)
+                        setActiveTab('summary')
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        activeTab === 'summary'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'bg-white/10 text-white/70 hover:bg-white/20'
+                      }`}
+                    >
+                      1. Riassunto
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsFlipped(false)
+                        setActiveTab('flashcards')
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        activeTab === 'flashcards'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'bg-white/10 text-white/70 hover:bg-white/20'
+                      }`}
+                    >
+                      2. Flashcard
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsFlipped(false)
+                        setActiveTab('quiz')
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        activeTab === 'quiz'
+                          ? 'bg-white text-slate-900 shadow-sm'
+                          : 'bg-white/10 text-white/70 hover:bg-white/20'
+                      }`}
+                    >
+                      3. Quiz
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Tab Navigation (Instagram Profile Style) */}
             <div className="border-t border-b border-slate-100 bg-white flex items-center justify-around w-full z-10 -mx-6 px-4 sm:mx-0 sm:rounded-3xl sm:border overflow-x-auto scrollbar-none">
               {[
@@ -1329,6 +1408,31 @@ function StudyHubContent() {
                           </span>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Next Step CTA in Guided Study Mode */}
+                  {isGuidedMode && (
+                    <div className="bg-gradient-to-r from-indigo-50/90 to-purple-50/90 border border-indigo-100 p-5 sm:p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left shadow-soft-sm mt-2">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-2xl bg-brand-gradient text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+                          1/3
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-slate-900">Hai finito di leggere il riassunto?</h4>
+                          <p className="text-xs text-slate-500 font-semibold mt-0.5">Passa alle flashcard per fissare i concetti e rafforzare i tuoi punti deboli.</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsFlipped(false)
+                          setActiveTab('flashcards')
+                        }}
+                        className="bg-brand-gradient hover:opacity-95 text-white font-extrabold px-5 py-3 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-100 transition-all cursor-pointer shrink-0 hover:scale-105"
+                      >
+                        <span>Continua con le Flashcard (Fase 2)</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
                 </>
@@ -1433,7 +1537,8 @@ function StudyHubContent() {
                   </div>
 
                   {/* Navigation Arrows */}
-                  <div className="flex items-center justify-between w-full max-w-sm mt-3 border-t border-slate-150 pt-4 px-2">
+                  {/* Navigation Prev / Next Action */}
+                  <div className="flex items-center justify-between w-full max-w-sm px-2">
                     <button
                       disabled={currentFlashcardIdx === 0}
                       onClick={() => {
@@ -1458,6 +1563,31 @@ function StudyHubContent() {
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
+
+                  {/* Next Step CTA in Guided Study Mode */}
+                  {isGuidedMode && (
+                    <div className="w-full max-w-md bg-gradient-to-r from-amber-50/90 to-orange-50/90 border border-amber-200/80 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left shadow-soft-sm mt-2">
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
+                          2/3
+                        </div>
+                        <div>
+                          <h4 className="font-extrabold text-sm text-slate-900">Hai ripassato le Flashcard?</h4>
+                          <p className="text-xs text-slate-500 font-semibold mt-0.5">Concludi la sessione con il Mini-Quiz per testare la tua preparazione.</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setIsFlipped(false)
+                          setActiveTab('quiz')
+                        }}
+                        className="bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-95 text-white font-extrabold px-5 py-3 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-md shadow-amber-100 transition-all cursor-pointer shrink-0 hover:scale-105"
+                      >
+                        <span>Inizia il Mini-Quiz (Fase 3)</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
 
                 </div>
               ) : !isFlashcardsRequested ? (
@@ -1842,6 +1972,62 @@ function StudyHubContent() {
       </div>
     </div>
   </main>
+
+  {/* Guided Study Celebration & Completion Modal */}
+  {showGuidedCelebration && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-100 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center gap-5 relative animate-in zoom-in-95 duration-200">
+        <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/20">
+          <Trophy className="w-8 h-8 animate-bounce" />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100/60 self-center">
+            Sessione Completata! 🎉
+          </span>
+          <h3 className="text-xl font-black text-slate-900 mt-1">
+            Ottimo lavoro, sessione superata!
+          </h3>
+          <p className="text-xs text-slate-500 font-semibold leading-relaxed">
+            Hai completato tutti gli step di studio guidato per <strong>{lecture.title}</strong>. Il tuo studio per oggi su questo argomento è stato registrato con successo.
+          </p>
+        </div>
+
+        {/* Stats summary */}
+        <div className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-around items-center">
+          <div className="flex flex-col items-center">
+            <span className="text-base font-black text-slate-900">
+              {quizScore !== null ? `${quizScore}/${quizQuestions.length}` : 'Completato'}
+            </span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase">Punteggio Quiz</span>
+          </div>
+          <div className="w-px h-8 bg-slate-200" />
+          <div className="flex flex-col items-center">
+            <span className="text-base font-black text-emerald-600 flex items-center gap-1">
+              <CheckCircle2 className="w-4 h-4" /> Fatto
+            </span>
+            <span className="text-[10px] text-slate-400 font-bold uppercase">Task in Home</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full mt-2">
+          <button
+            onClick={() => router.push('/home')}
+            className="w-full bg-brand-gradient hover:opacity-95 text-white font-extrabold py-3.5 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-md shadow-indigo-100 transition-all cursor-pointer"
+          >
+            <span>Torna alla Home</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setShowGuidedCelebration(false)}
+            className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold py-3.5 px-4 rounded-2xl text-xs transition-all cursor-pointer"
+          >
+            Rivedi Dettagli Lezione
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
 
   <BottomNav />
 </div>
