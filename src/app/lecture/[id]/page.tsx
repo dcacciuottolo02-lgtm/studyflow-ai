@@ -934,6 +934,39 @@ function StudyHubContent() {
     }
   }
 
+  const handleDeleteLectureDirectly = async () => {
+    if (!lecture) return
+    const confirmDel = confirm(
+      t('course.confirm.deleteLecture', { title: lecture.title })
+    )
+    if (!confirmDel) return
+
+    try {
+      const supabase = createClient()
+      const nowStr = new Date().toISOString()
+
+      // 1. Delete study materials (cascades to summaries, flashcards, quizzes)
+      await supabase.from('study_materials').delete().eq('lecture_id', lecture.id)
+
+      // 2. Delete ai_jobs
+      await supabase.from('ai_jobs').delete().eq('lecture_id', lecture.id)
+
+      // 3. Delete user_notes & resources
+      await supabase.from('user_notes').delete().eq('lecture_id', lecture.id)
+      await supabase.from('resources').delete().eq('lecture_id', lecture.id)
+
+      // 4. Soft-delete the lecture
+      await supabase
+        .from('lectures')
+        .update({ deleted_at: nowStr, status: 'deleted' })
+        .eq('id', lecture.id)
+
+      router.push(`/course/${lecture.course_id}`)
+    } catch (err: any) {
+      alert(err.message || 'Errore durante l\'eliminazione della lezione')
+    }
+  }
+
   return (    <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 transition-colors duration-300">
       
       {/* 1. Header Navigation */}
@@ -957,13 +990,22 @@ function StudyHubContent() {
           </h1>
         </div>
 
-        <button
-          onClick={fetchLectureHubData}
-          className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 hover:shadow-soft-sm transition-all duration-200 cursor-pointer"
-          title={t('hub.tooltip.reloadData')}
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchLectureHubData}
+            className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 hover:shadow-soft-sm transition-all duration-200 cursor-pointer"
+            title={t('hub.tooltip.reloadData')}
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleDeleteLectureDirectly}
+            className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-400 hover:text-rose-600 hover:border-rose-100 hover:bg-rose-50 hover:shadow-soft-sm transition-all duration-200 cursor-pointer"
+            title="Elimina Lezione"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       {/* Main Container */}

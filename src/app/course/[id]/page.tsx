@@ -275,9 +275,22 @@ export default function CourseDetailPage() {
       setToastType('success')
 
       const supabase = createClient()
+      const nowStr = new Date().toISOString()
+
+      // 1. Cascade delete study materials (deletes summaries, flashcards, quizzes)
+      await supabase.from('study_materials').delete().eq('lecture_id', lectureId)
+
+      // 2. Delete ai_jobs
+      await supabase.from('ai_jobs').delete().eq('lecture_id', lectureId)
+
+      // 3. Delete user_notes & resources
+      await supabase.from('user_notes').delete().eq('lecture_id', lectureId)
+      await supabase.from('resources').delete().eq('lecture_id', lectureId)
+
+      // 4. Soft-delete the lecture record
       const { error: deleteError } = await supabase
         .from('lectures')
-        .update({ deleted_at: new Date().toISOString() })
+        .update({ deleted_at: nowStr, status: 'deleted' })
         .eq('id', lectureId)
 
       if (deleteError) {
@@ -309,25 +322,24 @@ export default function CourseDetailPage() {
       const supabase = createClient()
       const nowStr = new Date().toISOString()
 
-      // 1. Cancel active ai_jobs
-      const { error: jobsError } = await supabase
-        .from('ai_jobs')
-        .update({
-          status: 'failed',
-          error_message: 'Annullato dall\'utente',
-          completed_at: nowStr,
-        })
-        .eq('lecture_id', lectureId)
-        .in('status', ['created', 'queued', 'running', 'retrying'])
+      // 1. Delete study materials (deletes summaries, flashcards, quizzes)
+      await supabase.from('study_materials').delete().eq('lecture_id', lectureId)
 
-      // 2. Soft-delete the lecture
+      // 2. Cancel and delete active ai_jobs
+      await supabase.from('ai_jobs').delete().eq('lecture_id', lectureId)
+
+      // 3. Delete user notes & resources
+      await supabase.from('user_notes').delete().eq('lecture_id', lectureId)
+      await supabase.from('resources').delete().eq('lecture_id', lectureId)
+
+      // 4. Soft-delete the lecture record
       const { error: deleteError } = await supabase
         .from('lectures')
-        .update({ deleted_at: nowStr, status: 'failed' })
+        .update({ deleted_at: nowStr, status: 'deleted' })
         .eq('id', lectureId)
 
-      if (jobsError || deleteError) {
-        console.error('Cancel and delete error:', jobsError, deleteError)
+      if (deleteError) {
+        console.error('Cancel and delete error:', deleteError)
         fetchCourseAndLectures()
         setToastMessage(t('course.toast.cancelLectureError'))
         setToastType('error')
