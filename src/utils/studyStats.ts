@@ -242,7 +242,7 @@ export function buildMultiCourseTodayQueue(
     const unknownCardsCount = flashcardsList.filter((fc: any) => fc.status === 'unknown').length
     const unseenCardsCount = flashcardsList.filter((fc: any) => fc.status === 'unseen').length
 
-    // Case 1: Critical Weak Spots detected
+    // Case 1: Critical Weak Spots detected (Highest Priority)
     if (unknownCardsCount > 0) {
       queue.push({
         id: `${lecture.id}-weak`,
@@ -262,9 +262,8 @@ export function buildMultiCourseTodayQueue(
         targetTab: 'flashcards',
       })
     }
-
     // Case 2: Fresh Lesson (< 24h - 48h) needing first consolidation
-    if (daysAgo <= 2 && (hasSummary || hasFlashcards)) {
+    else if (daysAgo <= 2 && (hasSummary || hasFlashcards)) {
       queue.push({
         id: `${lecture.id}-fresh`,
         lectureId: lecture.id,
@@ -283,9 +282,8 @@ export function buildMultiCourseTodayQueue(
         targetTab: 'summary',
       })
     }
-
     // Case 3: Day 3 to 5 Spaced Repetition (Quiz Active Recall)
-    if (daysAgo >= 3 && daysAgo <= 7 && hasQuiz) {
+    else if (daysAgo >= 3 && daysAgo <= 7 && hasQuiz) {
       queue.push({
         id: `${lecture.id}-quiz`,
         lectureId: lecture.id,
@@ -304,9 +302,8 @@ export function buildMultiCourseTodayQueue(
         targetTab: 'quiz',
       })
     }
-
     // Case 4: Unseen flashcards in active course
-    if (unseenCardsCount > 0 && queue.every((q) => q.lectureId !== lecture.id)) {
+    else if (unseenCardsCount > 0) {
       queue.push({
         id: `${lecture.id}-cards`,
         lectureId: lecture.id,
@@ -328,5 +325,15 @@ export function buildMultiCourseTodayQueue(
   })
 
   // Sort by highest urgency score first
-  return queue.sort((a, b) => b.urgencyScore - a.urgencyScore)
+  const sorted = queue.sort((a, b) => b.urgencyScore - a.urgencyScore)
+
+  // Guarantee 100% deduplication by lectureId
+  const uniqueMap = new Map<string, TodayTaskItem>()
+  for (const item of sorted) {
+    if (!uniqueMap.has(item.lectureId)) {
+      uniqueMap.set(item.lectureId, item)
+    }
+  }
+
+  return Array.from(uniqueMap.values())
 }
