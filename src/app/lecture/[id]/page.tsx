@@ -175,6 +175,10 @@ function StudyHubContent() {
   // Flashcards state
   const [currentFlashcardIdx, setCurrentFlashcardIdx] = useState(0)
   const [isFlipped, setIsFlipped] = useState(false)
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null)
+  const isSwipeHandled = useRef(false)
 
   // Quiz state
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({}) // questionId -> selectedIndex
@@ -648,8 +652,59 @@ function StudyHubContent() {
 
       if (fcUpdateError) throw fcUpdateError
     } catch (err) {
-      console.error('[Flashcard Update Error]:', err)
+      console.error('Update card mastery catch error:', err)
     }
+  }
+
+  // Flashcard Swipe gesture handlers
+  const handleCardTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    dragStartPos.current = { x: clientX, y: clientY }
+    setIsDragging(true)
+    isSwipeHandled.current = false
+  }
+
+  const handleCardTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!dragStartPos.current || isSwipeHandled.current) return
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    const deltaX = clientX - dragStartPos.current.x
+    const deltaY = clientY - dragStartPos.current.y
+    setDragOffset({ x: deltaX, y: deltaY })
+  }
+
+  const handleCardTouchEnd = () => {
+    if (!dragStartPos.current) return
+    const { x, y } = dragOffset
+    const currentCard = flashcards[currentFlashcardIdx]
+
+    // Minimal drag = tap to flip
+    if (Math.abs(x) < 12 && Math.abs(y) < 12) {
+      setIsFlipped((prev) => !prev)
+    } 
+    // Swipe Right (Mastered / Known)
+    else if (x > 65 && currentCard) {
+      isSwipeHandled.current = true
+      updateCardMastery(currentCard.id, true)
+      if (currentFlashcardIdx < flashcards.length - 1) {
+        setIsFlipped(false)
+        setCurrentFlashcardIdx((prev) => prev + 1)
+      }
+    } 
+    // Swipe Left (To Review / Unknown)
+    else if (x < -65 && currentCard) {
+      isSwipeHandled.current = true
+      updateCardMastery(currentCard.id, false)
+      if (currentFlashcardIdx < flashcards.length - 1) {
+        setIsFlipped(false)
+        setCurrentFlashcardIdx((prev) => prev + 1)
+      }
+    }
+
+    setDragOffset({ x: 0, y: 0 })
+    setIsDragging(false)
+    dragStartPos.current = null
   }
 
   // Submit Interactive Quiz
@@ -1516,13 +1571,49 @@ function StudyHubContent() {
                     )}
                   </div>
 
-                  {/* 3D Flashcard flip container */}
+                  {/* Swipe Guidance Helper */}
+                  <div className="flex items-center justify-between w-full max-w-sm px-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <span className="flex items-center gap-1 text-rose-500">
+                      👈 Swipe Sx = Da Rivedere
+                    </span>
+                    <span className="flex items-center gap-1 text-emerald-600">
+                      Swipe Dx = Capito 👉
+                    </span>
+                  </div>
+
+                  {/* 3D Flashcard flip & swipe container */}
                   <div
-                    onClick={() => setIsFlipped(!isFlipped)}
-                    className="w-full max-w-sm h-64 cursor-pointer [perspective:1000px] select-none"
+                    onMouseDown={handleCardTouchStart}
+                    onMouseMove={isDragging ? handleCardTouchMove : undefined}
+                    onMouseUp={handleCardTouchEnd}
+                    onMouseLeave={isDragging ? handleCardTouchEnd : undefined}
+                    onTouchStart={handleCardTouchStart}
+                    onTouchMove={handleCardTouchMove}
+                    onTouchEnd={handleCardTouchEnd}
+                    style={{
+                      transform: `translate3d(${dragOffset.x}px, ${dragOffset.y * 0.15}px, 0) rotate(${dragOffset.x * 0.08}deg)`,
+                      transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    }}
+                    className="w-full max-w-sm h-64 cursor-grab active:cursor-grabbing [perspective:1000px] select-none relative touch-pan-y"
                   >
+                    {/* Visual Swipe Right Overlay Badge */}
+                    {dragOffset.x > 30 && (
+                      <div className="absolute top-4 left-4 z-30 bg-emerald-500 text-white font-black text-xs px-3.5 py-1.5 rounded-2xl shadow-xl flex items-center gap-1.5 border-2 border-white animate-in zoom-in-75 duration-100">
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>CAPITO 🟢</span>
+                      </div>
+                    )}
+
+                    {/* Visual Swipe Left Overlay Badge */}
+                    {dragOffset.x < -30 && (
+                      <div className="absolute top-4 right-4 z-30 bg-rose-500 text-white font-black text-xs px-3.5 py-1.5 rounded-2xl shadow-xl flex items-center gap-1.5 border-2 border-white animate-in zoom-in-75 duration-100">
+                        <X className="w-4 h-4 stroke-[3]" />
+                        <span>DA RIVEDERE 🔴</span>
+                      </div>
+                    )}
+
                     <div
-                      className={`relative w-full h-full duration-300 preserve-3d ${
+                      className={`relative w-full h-full duration-300 preserve-3d pointer-events-none ${
                         isFlipped ? 'rotateY-180' : ''
                       }`}
                     >

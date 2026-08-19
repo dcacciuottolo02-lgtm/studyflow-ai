@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import {
   X,
   Sparkles,
@@ -71,6 +71,10 @@ export default function ConceptRecoveryModal({
   const [isFlipped, setIsFlipped] = useState(false)
   const [recoveredCount, setRecoveredCount] = useState(0)
   const [isSessionCompleted, setIsSessionCompleted] = useState(false)
+  const [dragOffset, setDragOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStartPos = useRef<{ x: number; y: number } | null>(null)
+  const isSwipeHandled = useRef(false)
 
   // Fetch concept and weak items data
   const fetchData = async () => {
@@ -264,6 +268,48 @@ export default function ConceptRecoveryModal({
     } else {
       setIsSessionCompleted(true)
     }
+  }
+
+  // Touch and drag swipe handlers
+  const handleCardTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    dragStartPos.current = { x: clientX, y: clientY }
+    setIsDragging(true)
+    isSwipeHandled.current = false
+  }
+
+  const handleCardTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!dragStartPos.current || isSwipeHandled.current) return
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    const deltaX = clientX - dragStartPos.current.x
+    const deltaY = clientY - dragStartPos.current.y
+    setDragOffset({ x: deltaX, y: deltaY })
+  }
+
+  const handleCardTouchEnd = () => {
+    if (!dragStartPos.current) return
+    const { x, y } = dragOffset
+
+    // Tap to flip
+    if (Math.abs(x) < 12 && Math.abs(y) < 12) {
+      setIsFlipped((prev) => !prev)
+    } 
+    // Swipe Right (Recovered / Understood)
+    else if (x > 65) {
+      isSwipeHandled.current = true
+      handleMarkRecovered()
+    } 
+    // Swipe Left (Skip / To Review)
+    else if (x < -65) {
+      isSwipeHandled.current = true
+      handleSkipWeak()
+    }
+
+    setDragOffset({ x: 0, y: 0 })
+    setIsDragging(false)
+    dragStartPos.current = null
   }
 
   if (!isOpen) return null
@@ -533,29 +579,61 @@ export default function ConceptRecoveryModal({
                     <span>Carta {recoveryIndex + 1} di {weakCards.length}</span>
                   </div>
 
-                  {/* 3D Recovery Card */}
+                  {/* Swipe Guidance Helper */}
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 px-1">
+                    <span className="text-slate-500">👈 Swipe Sx = Salta</span>
+                    <span className="text-emerald-600">Swipe Dx = Capito! 👉</span>
+                  </div>
+
+                  {/* 3D Recovery Card with Swipe and Drag */}
                   <div
-                    onClick={() => setIsFlipped(!isFlipped)}
-                    className={`min-h-[220px] sm:min-h-[250px] p-8 rounded-3xl border cursor-pointer transition-all duration-300 flex flex-col justify-between text-center select-none shadow-soft-sm hover:shadow-soft-md ${
+                    onMouseDown={handleCardTouchStart}
+                    onMouseMove={isDragging ? handleCardTouchMove : undefined}
+                    onMouseUp={handleCardTouchEnd}
+                    onMouseLeave={isDragging ? handleCardTouchEnd : undefined}
+                    onTouchStart={handleCardTouchStart}
+                    onTouchMove={handleCardTouchMove}
+                    onTouchEnd={handleCardTouchEnd}
+                    style={{
+                      transform: `translate3d(${dragOffset.x}px, ${dragOffset.y * 0.15}px, 0) rotate(${dragOffset.x * 0.08}deg)`,
+                      transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    }}
+                    className={`min-h-[220px] sm:min-h-[250px] p-8 rounded-3xl border cursor-grab active:cursor-grabbing transition-colors duration-200 flex flex-col justify-between text-center select-none shadow-soft-sm hover:shadow-soft-md relative touch-pan-y ${
                       isFlipped
                         ? 'bg-gradient-to-br from-emerald-50/80 via-white to-indigo-50/40 border-emerald-200'
                         : 'bg-white border-slate-200/90 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400">
+                    {/* Visual Swipe Right Overlay Badge */}
+                    {dragOffset.x > 30 && (
+                      <div className="absolute top-4 left-4 z-30 bg-emerald-500 text-white font-black text-xs px-3.5 py-1.5 rounded-2xl shadow-xl flex items-center gap-1.5 border-2 border-white animate-in zoom-in-75 duration-100">
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>ORA L'HO CAPITO! 🟢</span>
+                      </div>
+                    )}
+
+                    {/* Visual Swipe Left Overlay Badge */}
+                    {dragOffset.x < -30 && (
+                      <div className="absolute top-4 right-4 z-30 bg-slate-700 text-white font-black text-xs px-3.5 py-1.5 rounded-2xl shadow-xl flex items-center gap-1.5 border-2 border-white animate-in zoom-in-75 duration-100">
+                        <ChevronRight className="w-4 h-4" />
+                        <span>SALTA PER ORA</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-slate-400 pointer-events-none">
                       <span>{isFlipped ? '💡 Spiegazione / Soluzione' : '❓ Domanda Critica'}</span>
                       <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg">
-                        Clicca per svelare
+                        Tocca per girare
                       </span>
                     </div>
 
-                    <div className="my-auto py-4">
+                    <div className="my-auto py-4 pointer-events-none">
                       <p className="text-base sm:text-lg font-black text-slate-900 leading-snug">
                         {isFlipped ? currentCard?.answer : currentCard?.question}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-center gap-1.5 text-xs text-indigo-600 font-extrabold">
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-indigo-600 font-extrabold pointer-events-none">
                       <RotateCw className="w-3.5 h-3.5" />
                       <span>{isFlipped ? 'Mostra domanda' : 'Mostra spiegazione corretta'}</span>
                     </div>
