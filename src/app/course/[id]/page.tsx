@@ -10,6 +10,7 @@ import CourseModal, { ScheduleItem, SyllabusTopic, ExamMilestone } from '@/compo
 import SyllabusModal from '@/components/SyllabusModal'
 import CourseArchiveModal from '@/components/CourseArchiveModal'
 import ConceptRecoveryModal from '@/components/ConceptRecoveryModal'
+import ExamModeModal from '@/components/ExamModeModal'
 import BottomNav from '@/components/BottomNav'
 import Toast from '@/components/Toast'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
@@ -83,6 +84,7 @@ export default function CourseDetailPage() {
   const [isSyllabusModalOpen, setIsSyllabusModalOpen] = useState(false)
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false)
   const [isConceptModalOpen, setIsConceptModalOpen] = useState(false)
+  const [isExamModeOpen, setIsExamModeOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info')
   const [error, setError] = useState<string | null>(null)
@@ -762,6 +764,20 @@ export default function CourseDetailPage() {
                 </div>
               ) : null}
 
+              {/* Exam Mode Trigger Button */}
+              {(course.exam_milestones?.length || course.exam_date) ? (
+                <button
+                  onClick={() => setIsExamModeOpen(true)}
+                  className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 hover:bg-amber-100/60 border border-amber-200/80 text-amber-950 font-black text-xs flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
+                >
+                  <span className="flex items-center gap-2">
+                    <Target className="w-4 h-4 text-amber-600 group-hover:scale-110 transition-transform" />
+                    <span>🎯 Piano Esame & Prontezza</span>
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-amber-700 group-hover:translate-x-0.5 transition-transform" />
+                </button>
+              ) : null}
+
               {/* Weekly schedule if set */}
               {course.schedule && course.schedule.length > 0 && (
                 <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-50">
@@ -950,6 +966,26 @@ export default function CourseDetailPage() {
         courseName={course.name}
         courseColor={course.color}
         onMasteryUpdated={fetchCourseAndLectures}
+      />
+
+      {/* Adaptive Exam Mode Modal */}
+      <ExamModeModal
+        isOpen={isExamModeOpen}
+        onClose={() => setIsExamModeOpen(false)}
+        courseId={course.id}
+        courseName={course.name}
+        courseColor={course.color}
+        cfu={course.cfu}
+        professor={course.professor}
+        examDate={course.exam_date}
+        examMilestones={course.exam_milestones}
+        syllabusTopics={course.syllabus_topics}
+        schedule={course.schedule}
+        lectures={lectures}
+        masteryStats={masteryStats}
+        onOpenRecord={() => router.push(`/course/${course.id}/record`)}
+        onOpenRecovery={() => setIsConceptModalOpen(true)}
+        onOpenArchive={() => setIsArchiveModalOpen(true)}
       />
 
       {/* Course Edit/Create Modal */}
