@@ -693,10 +693,9 @@ export default function CourseDetailPage() {
                 <div className="flex flex-col gap-2">
                   {course.exam_milestones.map((m) => {
                     if (!m?.date || isNaN(new Date(m.date).getTime())) return null
-                    const days = Math.ceil(
-                      (new Date(m.date).getTime() - new Date().setHours(0, 0, 0, 0)) /
-                        (1000 * 60 * 60 * 24)
-                    )
+                    const targetMidnight = new Date(m.date).setHours(0, 0, 0, 0)
+                    const todayMidnight = new Date().setHours(0, 0, 0, 0)
+                    const days = Math.round((targetMidnight - todayMidnight) / (1000 * 60 * 60 * 24))
                     const isMidterm = m.type === 'midterm'
                     return (
                       <div
@@ -739,7 +738,13 @@ export default function CourseDetailPage() {
                               : 'border-indigo-200 text-indigo-800'
                           }`}
                         >
-                          {days > 0 ? `-${days} giorni` : days === 0 ? 'Oggi!' : 'Passato'}
+                          {days > 1
+                            ? `-${days} giorni`
+                            : days === 1
+                            ? '-1 giorno'
+                            : days === 0
+                            ? 'Oggi!'
+                            : 'Passato'}
                         </span>
                       </div>
                     )
@@ -766,10 +771,18 @@ export default function CourseDetailPage() {
                   </div>
 
                   {(() => {
-                    const days = Math.ceil((new Date(course.exam_date).getTime() - new Date().setHours(0,0,0,0)) / (1000 * 60 * 60 * 24))
+                    const targetMidnight = new Date(course.exam_date).setHours(0, 0, 0, 0)
+                    const todayMidnight = new Date().setHours(0, 0, 0, 0)
+                    const days = Math.round((targetMidnight - todayMidnight) / (1000 * 60 * 60 * 24))
                     return (
                       <span className="text-xs font-black px-2.5 py-1 rounded-xl bg-white border border-amber-200 text-amber-800 shadow-xs">
-                        {days > 0 ? `-${days} giorni` : days === 0 ? 'Oggi!' : 'Passato'}
+                        {days > 1
+                          ? `-${days} giorni`
+                          : days === 1
+                          ? '-1 giorno'
+                          : days === 0
+                          ? 'Oggi!'
+                          : 'Passato'}
                       </span>
                     )
                   })()}
