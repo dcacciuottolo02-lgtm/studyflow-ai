@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Flame,
   BookOpen,
+  BookmarkCheck,
 } from 'lucide-react'
 
 interface Course {
@@ -44,6 +45,8 @@ interface Course {
   syllabus_topics?: SyllabusTopic[]
   syllabus_text?: string | null
   exam_milestones?: ExamMilestone[]
+  grading_policy?: string | null
+  materials_info?: string | null
 }
 
 interface Lecture {
@@ -96,7 +99,7 @@ export default function CourseDetailPage() {
       let courseData: any = null
       const { data: fullCourse, error: courseFetchError } = await supabase
         .from('courses')
-        .select('id, name, professor, color, status, cfu, exam_date, schedule, syllabus_topics, syllabus_text, exam_milestones, deleted_at')
+        .select('id, name, professor, color, status, cfu, exam_date, schedule, syllabus_topics, syllabus_text, exam_milestones, grading_policy, materials_info, deleted_at')
         .eq('id', courseId)
         .is('deleted_at', null)
         .maybeSingle()
@@ -757,6 +760,40 @@ export default function CourseDetailPage() {
               </div>
             )}
 
+            {/* Grading Policy & Materials Card (if extracted/set) */}
+            {(course.grading_policy || course.materials_info) && (
+              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-3.5 text-left">
+                <div className="flex items-center gap-2">
+                  <BookmarkCheck className="w-4 h-4 text-indigo-600" />
+                  <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest">
+                    Info Esame & Valutazione
+                  </h3>
+                </div>
+
+                {course.grading_policy && (
+                  <div className="flex flex-col gap-1 bg-slate-50 border border-slate-150/60 p-3 rounded-2xl">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                      Criteri di Valutazione
+                    </span>
+                    <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                      {course.grading_policy}
+                    </p>
+                  </div>
+                )}
+
+                {course.materials_info && (
+                  <div className="flex flex-col gap-1 bg-slate-50 border border-slate-150/60 p-3 rounded-2xl">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                      Materiali & Libri Consigliati
+                    </span>
+                    <p className="text-xs text-slate-700 font-semibold leading-relaxed">
+                      {course.materials_info}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Course Academic Mastery Card */}
             <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
               <div className="flex items-center justify-between">
@@ -873,6 +910,8 @@ export default function CourseDetailPage() {
                 syllabus_topics: course.syllabus_topics,
                 syllabus_text: course.syllabus_text,
                 exam_milestones: course.exam_milestones,
+                grading_policy: course.grading_policy,
+                materials_info: course.materials_info,
               }
             : undefined
         }

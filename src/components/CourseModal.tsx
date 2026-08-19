@@ -18,6 +18,8 @@ import {
   Award,
   FileText,
   CheckCircle2,
+  Percent,
+  BookmarkCheck,
 } from 'lucide-react'
 import { useLanguage } from '@/contexts/LanguageContext'
 
@@ -56,6 +58,8 @@ interface CourseModalProps {
     syllabus_topics?: SyllabusTopic[]
     syllabus_text?: string | null
     exam_milestones?: ExamMilestone[]
+    grading_policy?: string | null
+    materials_info?: string | null
   }
 }
 
@@ -77,7 +81,7 @@ const weekDays: { key: ScheduleItem['day']; label: string; short: string }[] = [
   { key: 'saturday', label: 'Sabato', short: 'Sab' },
 ]
 
-// Smart parser to extract chapters from raw syllabus text/markdown
+// Fallback heuristic parser
 export function extractChaptersFromText(rawText: string): SyllabusTopic[] {
   if (!rawText.trim()) return []
 
@@ -85,7 +89,6 @@ export function extractChaptersFromText(rawText: string): SyllabusTopic[] {
   const extracted: string[] = []
 
   lines.forEach((line) => {
-    // Check if line looks like a header, numbered item, module, chapter or bullet
     const headerMatch = line.match(
       /^(#{1,4}\s*|\d+[\.\)\-]\s*|[-*•]\s*|(Modulo|Capitolo|Lezione|Chapter|Unit|Topic|Part)\s*[\d\w]*[:\-]?\s*)(.+)/i
     )
@@ -137,6 +140,12 @@ export default function CourseModal({
   const [syllabusText, setSyllabusText] = useState('')
   const [syllabusTopics, setSyllabusTopics] = useState<SyllabusTopic[]>([])
   const [newTopicTitle, setNewTopicTitle] = useState('')
+  
+  // AI Insights from Syllabus
+  const [gradingPolicy, setGradingPolicy] = useState('')
+  const [materialsInfo, setMaterialsInfo] = useState('')
+  const [isAnalyzingSyllabus, setIsAnalyzingSyllabus] = useState(false)
+  const [aiStatusMsg, setAiStatusMsg] = useState<string | null>(null)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -156,6 +165,8 @@ export default function CourseModal({
         setSchedule(initialData.schedule || [])
         setSyllabusTopics(initialData.syllabus_topics || [])
         setSyllabusText(initialData.syllabus_text || '')
+        setGradingPolicy(initialData.grading_policy || '')
+        setMaterialsInfo(initialData.materials_info || '')
         setExamMilestones(
           initialData.exam_milestones && initialData.exam_milestones.length > 0
             ? initialData.exam_milestones
@@ -172,10 +183,13 @@ export default function CourseModal({
         setSchedule([])
         setSyllabusTopics([])
         setSyllabusText('')
+        setGradingPolicy('')
+        setMaterialsInfo('')
         setExamMilestones([])
       }
       setActiveTab('info')
       setError(null)
+      setAiStatusMsg(null)
       setShowDuplicateWarning(false)
     }
   }, [isOpen, initialData])
@@ -233,12 +247,87 @@ export default function CourseModal({
     setExamMilestones(examMilestones.filter((m) => m.id !== id))
   }
 
-  // Smart extraction of chapters from pasted syllabus text
-  const handleAutoExtractChapters = () => {
-    if (!syllabusText.trim()) return
-    const extracted = extractChaptersFromText(syllabusText)
-    if (extracted.length > 0) {
+  // Smart AI Analysis of raw syllabus text
+  const handleAiAnalyzeSyllabus = async () => {
+    if (!syllabusText.trim() || syllabusText.trim().length < 15) {
+      setError('Incolla prima il testo del syllabus nel riquadro sottostante')
+      return
+    }
+
+    setIsAnalyzingSyllabus(true)
+    setError(null)
+    setAiStatusMsg(null)
+
+    try {
+      const res = await fetch('/api/courses/parse-syllabus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ syllabusText }),
+      })
+
+      const json = await res.json()
+
+      if (!res.ok || json.error) {
+        throw new Error(json.error || 'Errore durante l\'analisi AI del syllabus')
+      }
+
+      const { data } = json
+
+      // 1. Set chapters with high precision
+      if (Array.isArray(data.chapters) && data.chapters.length > 0) {
+        const mappedTopics: SyllabusTopic[] = data.chapters.map((ch: any, idx: number) => ({
+          id: crypto.randomUUID(),
+          title: ch.title,
+          order_index: idx + 1,
+        }))
+        setSyllabusTopics(mappedTopics)
+      } else {
+        // Fallback to heuristic
+        setSyllabusTopics(extractChaptersFromText(syllabusText))
+      }
+
+      // 2. Set exam milestones if detected
+      if (Array.isArray(data.exam_milestones) && data.exam_milestones.length > 0) {
+        const mappedMilestones: ExamMilestone[] = data.exam_milestones.map((m: any) => ({
+          id: crypto.randomUUID(),
+          name: m.name || (m.type === 'midterm' ? 'Midterm Exam' : 'Esame Finale'),
+          type: m.type || 'midterm',
+          date: m.date || '',
+        }))
+        setExamMilestones(mappedMilestones)
+      }
+
+      // 3. Pre-populate course meta if empty
+      if (data.course_name && (!name || name.trim().length < 2)) {
+        setName(data.course_name)
+      }
+      if (data.professor && !professor) {
+        setProfessor(data.professor)
+      }
+      if (data.cfu && !cfu) {
+        setCfu(String(data.cfu))
+      }
+
+      // 4. Set grading policy & materials info
+      if (data.grading_policy) {
+        setGradingPolicy(data.grading_policy)
+      }
+      if (data.materials_info) {
+        setMaterialsInfo(data.materials_info)
+      }
+
+      setAiStatusMsg(
+        `✨ Analisi completata con successo! Rilevati ${data.chapters?.length || 0} capitoli, ${
+          data.exam_milestones?.length || 0
+        } prove d'esame e criteri di valutazione.`
+      )
+    } catch (err: any) {
+      console.warn('AI parsing failed, falling back to local extractor:', err)
+      const extracted = extractChaptersFromText(syllabusText)
       setSyllabusTopics(extracted)
+      setAiStatusMsg('Capitoli estratti con parser standard.')
+    } finally {
+      setIsAnalyzingSyllabus(false)
     }
   }
 
@@ -324,7 +413,6 @@ export default function CourseModal({
         return
       }
 
-      // Determine main exam_date (first upcoming milestone date or direct input)
       const primaryExamDate =
         finalExamDate ||
         examMilestones.find((m) => m.type === 'final')?.date ||
@@ -341,17 +429,17 @@ export default function CourseModal({
         syllabus_text: syllabusText.trim() || null,
         syllabus_topics: syllabusTopics,
         exam_milestones: examMilestones,
+        grading_policy: gradingPolicy.trim() || null,
+        materials_info: materialsInfo.trim() || null,
       }
 
       if (isEdit) {
-        // Edit flow
         let { error: updateError } = await supabase
           .from('courses')
           .update(payload)
           .eq('id', initialData.id)
 
         if (updateError) {
-          // Fallback to base fields if new columns are not yet applied in DB
           const basePayload = {
             name: name.trim(),
             professor: professor.trim() || null,
@@ -372,7 +460,6 @@ export default function CourseModal({
           onClose()
         }
       } else {
-        // Create flow
         const { data: workspace, error: wsError } = await supabase
           .from('workspaces')
           .select('id')
@@ -385,7 +472,6 @@ export default function CourseModal({
           return
         }
 
-        // Duplicate check
         if (!showDuplicateWarning) {
           const { data: existingCourse } = await supabase
             .from('courses')
@@ -410,7 +496,6 @@ export default function CourseModal({
         })
 
         if (insertError) {
-          // Fallback to base fields
           const basePayload = {
             workspace_id: workspace.id,
             name: name.trim(),
@@ -500,6 +585,14 @@ export default function CourseModal({
             )}
           </button>
         </div>
+
+        {/* AI Status notification */}
+        {aiStatusMsg && (
+          <div className="flex items-start gap-2.5 bg-emerald-50 text-emerald-800 border border-emerald-200 p-3.5 rounded-2xl text-xs font-semibold animate-in fade-in">
+            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <span>{aiStatusMsg}</span>
+          </div>
+        )}
 
         {/* Error notification */}
         {error && (
@@ -688,8 +781,109 @@ export default function CourseModal({
           {activeTab === 'syllabus' && (
             <div className="flex flex-col gap-5">
               
-              {/* SECTION A: TAPPE D'ESAME & MIDTERM */}
-              <div className="flex flex-col gap-2.5">
+              {/* SECTION A: TESTO COMPLETO DEL SYLLABUS + ANALISI AI */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 text-indigo-600" />
+                    <label className="text-[10px] font-extrabold text-slate-800 uppercase tracking-widest">
+                      Testo Completo del Syllabus
+                    </label>
+                  </div>
+                  {syllabusText.trim() && (
+                    <button
+                      type="button"
+                      disabled={isAnalyzingSyllabus}
+                      onClick={handleAiAnalyzeSyllabus}
+                      className="inline-flex items-center gap-1 px-3.5 py-1.5 bg-brand-gradient text-white rounded-xl text-xs font-black shadow-xs hover:opacity-95 transition-all cursor-pointer hover:scale-105 disabled:opacity-50"
+                    >
+                      {isAnalyzingSyllabus ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Analisi AI in corso...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>✨ Analizza con AI</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                <textarea
+                  rows={4}
+                  value={syllabusText}
+                  onChange={(e) => setSyllabusText(e.target.value)}
+                  placeholder="Incolla qui il testo o il programma d'esame (l'AI estrarrà capitoli, date parziali, pesi di valutazione e testi consigliati)..."
+                  className="w-full bg-white border border-slate-200 p-3 rounded-2xl text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all font-mono leading-relaxed resize-none"
+                />
+
+                {syllabusText.trim() && syllabusTopics.length === 0 && (
+                  <button
+                    type="button"
+                    disabled={isAnalyzingSyllabus}
+                    onClick={handleAiAnalyzeSyllabus}
+                    className="w-full py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-black border border-indigo-200 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
+                  >
+                    {isAnalyzingSyllabus ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                        <span>Analisi intelligente in corso con Gemini...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-indigo-600" />
+                        <span>✨ Estrai Capitoli, Midterms & Valutazione con AI</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* SECTION B: CRITERI DI VALUTAZIONE E MATERIALI (AI DETECTED) */}
+              {(gradingPolicy || materialsInfo) && (
+                <div className="bg-slate-50 border border-slate-200/80 p-3.5 rounded-2xl flex flex-col gap-2.5">
+                  <div className="flex items-center gap-1.5 text-indigo-900">
+                    <BookmarkCheck className="w-4 h-4 text-indigo-600" />
+                    <span className="text-[10px] font-black uppercase tracking-wider">
+                      Informazioni & Metodi di Valutazione Rilevati
+                    </span>
+                  </div>
+
+                  {gradingPolicy && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[9px] font-extrabold uppercase text-slate-400">
+                        Criteri di Valutazione / Pesi Esame
+                      </span>
+                      <input
+                        type="text"
+                        value={gradingPolicy}
+                        onChange={(e) => setGradingPolicy(e.target.value)}
+                        className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {materialsInfo && (
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[9px] font-extrabold uppercase text-slate-400">
+                        Libri di Testo & Materiali Consigliati
+                      </span>
+                      <input
+                        type="text"
+                        value={materialsInfo}
+                        onChange={(e) => setMaterialsInfo(e.target.value)}
+                        className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* SECTION C: TAPPE D'ESAME & MIDTERM */}
+              <div className="flex flex-col gap-2.5 pt-1 border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <Award className="w-4 h-4 text-amber-500" />
@@ -765,7 +959,6 @@ export default function CourseModal({
                     ))}
                   </div>
                 ) : (
-                  /* Quick single final exam date input */
                   <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-2xl">
                     <Calendar className="w-4 h-4 text-indigo-600" />
                     <input
@@ -779,55 +972,14 @@ export default function CourseModal({
                 )}
               </div>
 
-              {/* SECTION B: TESTO COMPLETO DEL SYLLABUS & ESTRAZIONE CAPITOLI */}
-              <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-indigo-600" />
-                    <label className="text-[10px] font-extrabold text-slate-800 uppercase tracking-widest">
-                      Incolla il Testo del Syllabus
-                    </label>
-                  </div>
-                  {syllabusText.trim() && (
-                    <button
-                      type="button"
-                      onClick={handleAutoExtractChapters}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-brand-gradient text-white rounded-xl text-[10px] font-black shadow-xs hover:opacity-95 transition-all cursor-pointer hover:scale-105"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>Estrai Capitoli Subito</span>
-                    </button>
-                  )}
-                </div>
-
-                <textarea
-                  rows={4}
-                  value={syllabusText}
-                  onChange={(e) => setSyllabusText(e.target.value)}
-                  placeholder="Incolla qui il testo o il programma d'esame (es. # Modulo 1: Titolo, # Modulo 2... o l'elenco dei capitoli del docente)"
-                  className="w-full bg-white border border-slate-200 p-3 rounded-2xl text-slate-800 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 transition-all font-mono leading-relaxed resize-none"
-                />
-
-                {syllabusText.trim() && syllabusTopics.length === 0 && (
-                  <button
-                    type="button"
-                    onClick={handleAutoExtractChapters}
-                    className="w-full py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold border border-indigo-200 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>Genera Capitoli Automaticamente dal Testo Incollato</span>
-                  </button>
-                )}
-              </div>
-
-              {/* SECTION C: CAPITOLI ESTRATTI (SYLLABUS TOPICS) */}
+              {/* SECTION D: CAPITOLI ESTRATTI (SYLLABUS TOPICS) */}
               <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest pl-0.5">
                     Mappa dei Capitoli ({syllabusTopics.length})
                   </label>
                   <span className="text-[10px] text-slate-400 font-medium">
-                    Serviranno per collegare le lezioni
+                    Ordinati e collegabili alle lezioni
                   </span>
                 </div>
 
@@ -857,7 +1009,7 @@ export default function CourseModal({
 
                 {/* Topics list */}
                 {syllabusTopics.length > 0 ? (
-                  <div className="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
                     {syllabusTopics.map((topic, idx) => (
                       <div
                         key={topic.id}
@@ -878,7 +1030,7 @@ export default function CourseModal({
                   </div>
                 ) : (
                   <p className="text-[11px] text-slate-400 text-center py-2 font-medium">
-                    Incolla il testo del Syllabus sopra per estrarre automaticamente i capitoli!
+                    Incolla il testo del Syllabus sopra e clicca su "✨ Analizza con AI" per estrarre tutti i capitoli con precisione millimetrica!
                   </p>
                 )}
               </div>
@@ -940,7 +1092,7 @@ export default function CourseModal({
             {activeTab === 'syllabus' && (
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || isAnalyzingSyllabus}
                 className="flex-1 bg-brand-gradient hover:opacity-95 text-white font-extrabold py-3.5 rounded-2xl shadow-md shadow-indigo-100 transition-all flex items-center justify-center gap-2 text-xs disabled:opacity-50 cursor-pointer"
               >
                 {loading ? (
