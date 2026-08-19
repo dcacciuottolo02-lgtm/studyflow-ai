@@ -708,6 +708,41 @@ function StudyHubContent() {
     dragStartPos.current = null
   }
 
+  // Keyboard navigation for Flashcards (ArrowLeft = Review, ArrowRight = Mastered, Space = Flip)
+  useEffect(() => {
+    if (activeTab !== 'flashcards' || flashcards.length === 0) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input/textarea
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return
+
+      const currentCard = flashcards[currentFlashcardIdx]
+      if (!currentCard) return
+
+      if (e.code === 'Space' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        setIsFlipped((prev) => !prev)
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault()
+        updateCardMastery(currentCard.id, true)
+        if (currentFlashcardIdx < flashcards.length - 1) {
+          setIsFlipped(false)
+          setCurrentFlashcardIdx((prev) => prev + 1)
+        }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault()
+        updateCardMastery(currentCard.id, false)
+        if (currentFlashcardIdx < flashcards.length - 1) {
+          setIsFlipped(false)
+          setCurrentFlashcardIdx((prev) => prev + 1)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeTab, currentFlashcardIdx, flashcards])
+
   // Submit Interactive Quiz
   const handleSubmitQuiz = async () => {
     if (quizQuestions.length === 0) return
@@ -1544,34 +1579,40 @@ function StudyHubContent() {
 
           {/* TAB 2: FLASHCARDS CAROUSEL */}
           {activeTab === 'flashcards' && (
-            <div className="flex flex-col gap-6">               {isFlashcardJobActive ? (
+            <div className="flex flex-col gap-6">
+              {isFlashcardJobActive ? (
                 <div className="bg-white border border-slate-100 p-12 rounded-3xl text-center shadow-soft-md flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
                   <p className="text-sm font-semibold text-slate-500">{t('hub.flashcards.generating')}</p>
                 </div>
               ) : flashcards.length > 0 ? (
-                <div className="flex flex-col items-center gap-6">
+                /* Luxury Flashcards Stage Arena */
+                <div className="w-full bg-gradient-to-b from-slate-50/90 via-indigo-50/20 to-white border border-slate-200/80 rounded-[36px] p-5 sm:p-8 flex flex-col items-center gap-6 shadow-soft-md relative overflow-hidden">
                   
+                  {/* Ambient Background Glow Orbs */}
+                  <div className="absolute -top-16 -left-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute -bottom-16 -right-16 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+
                   {/* Header: Progress Bar & Regeneration */}
-                  <div className="flex flex-col gap-2.5 w-full max-w-md px-2">
+                  <div className="flex flex-col gap-3 w-full max-w-lg relative z-10">
                     <div className="flex justify-between items-center w-full">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-black text-slate-800">
-                          Flashcard {currentFlashcardIdx + 1}
+                      <div className="flex items-center gap-2.5">
+                        <span className="px-3 py-1 bg-white border border-slate-200/80 rounded-full text-xs font-black text-slate-900 shadow-2xs">
+                          {currentFlashcardIdx + 1} / {flashcards.length}
                         </span>
-                        <span className="text-xs font-bold text-slate-400">
-                          di {flashcards.length}
+                        <span className="text-xs font-bold text-slate-500 hidden sm:inline">
+                          {Math.round(((currentFlashcardIdx + 1) / flashcards.length) * 100)}% completato
                         </span>
                       </div>
 
                       {userPlan === 'free' ? (
-                        <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl">
-                          ✨ PRO: Rigenerazione illimitata
+                        <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl">
+                          ✨ PRO: Rigenerazione
                         </span>
                       ) : (
                         <button
                           onClick={() => handleGenerateModule('flashcards')}
-                          className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100/50 py-1 px-2.5 rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                          className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-white hover:bg-indigo-50 border border-indigo-100 py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
                         >
                           <RefreshCw className="w-3 h-3" />
                           <span>{t('hub.flashcards.regenerate')}</span>
@@ -1579,10 +1620,10 @@ function StudyHubContent() {
                       )}
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
+                    {/* Glowing Progress Bar */}
+                    <div className="w-full bg-slate-200/60 h-2 rounded-full overflow-hidden p-0.5 border border-white/80 shadow-inner">
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 transition-all duration-300 shadow-xs"
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 transition-all duration-300 shadow-sm"
                         style={{
                           width: `${Math.max(5, ((currentFlashcardIdx + 1) / flashcards.length) * 100)}%`,
                         }}
@@ -1590,29 +1631,33 @@ function StudyHubContent() {
                     </div>
                   </div>
 
-                  {/* Swipe Guidance Helper Pills */}
-                  <div className="flex items-center justify-between w-full max-w-md px-2 mt-1">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50/80 border border-rose-200/70 text-rose-700 font-extrabold text-[10px] shadow-2xs">
-                      <X className="w-3 h-3 stroke-[3]" />
+                  {/* Sleek Swipe & Keyboard Guide Banner */}
+                  <div className="flex items-center justify-between w-full max-w-lg px-1 relative z-10">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-rose-200/80 text-rose-600 font-black text-[10px] shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                       <span>Swipe Sx = Da Rivedere</span>
                     </div>
 
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50/80 border border-emerald-200/70 text-emerald-700 font-extrabold text-[10px] shadow-2xs">
-                      <Check className="w-4 h-4 stroke-[3]" />
+                    <span className="text-[10px] text-slate-400 font-bold hidden sm:inline">
+                      Scorciatoie: <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9px]">←</kbd> <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9px]">Spazio</kbd> <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9px]">→</kbd>
+                    </span>
+
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-emerald-200/80 text-emerald-700 font-black text-[10px] shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span>Swipe Dx = Capito</span>
                     </div>
                   </div>
 
                   {/* Card Deck Wrapper with Realistic Depth Layers */}
-                  <div className="relative w-full max-w-md h-72 sm:h-80 flex items-center justify-center select-none my-1">
+                  <div className="relative w-full max-w-lg h-80 sm:h-96 flex items-center justify-center select-none my-1 z-10">
                     {/* Layer 3: Deepest card background */}
                     {currentFlashcardIdx < flashcards.length - 2 && (
-                      <div className="absolute inset-x-8 bottom-1 h-full bg-slate-100/70 border border-slate-200/40 rounded-[32px] -z-20 scale-[0.90] opacity-50 shadow-sm" />
+                      <div className="absolute inset-x-10 -bottom-5 h-full bg-slate-200/60 border border-slate-300/40 rounded-[36px] -z-20 scale-[0.88] opacity-60 shadow-xs" />
                     )}
 
                     {/* Layer 2: Next card shadow */}
                     {currentFlashcardIdx < flashcards.length - 1 && (
-                      <div className="absolute inset-x-4 bottom-3 h-full bg-white/90 border border-slate-200/70 rounded-[32px] -z-10 scale-[0.95] shadow-md" />
+                      <div className="absolute inset-x-5 -bottom-2.5 h-full bg-white/90 border border-slate-200/80 rounded-[36px] -z-10 scale-[0.94] shadow-md" />
                     )}
 
                     {/* Active Front/Back Swipe Card */}
@@ -1628,7 +1673,7 @@ function StudyHubContent() {
                         transform: `translate3d(${dragOffset.x}px, ${dragOffset.y * 0.15}px, 0) rotate(${dragOffset.x * 0.08}deg)`,
                         transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
                       }}
-                      className="w-full h-full cursor-grab active:cursor-grabbing [perspective:1000px] relative touch-pan-y"
+                      className="w-full h-full cursor-grab active:cursor-grabbing [perspective:1200px] relative touch-pan-y"
                     >
                       {/* Floating Feedback Badge: Swipe Right */}
                       {dragOffset.x > 25 && (
@@ -1652,37 +1697,51 @@ function StudyHubContent() {
                         }`}
                       >
                         {/* FRONT CARD: Light Luxury Style */}
-                        <div className="absolute inset-0 bg-white border border-slate-200/90 rounded-[32px] shadow-[0_20px_50px_rgba(79,70,229,0.09)] p-7 sm:p-8 flex flex-col justify-between items-center text-center backface-hidden relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-b from-white via-slate-50/30 to-white border border-slate-200/90 rounded-[36px] shadow-[0_25px_60px_-15px_rgba(79,70,229,0.12),0_0_0_1px_rgba(255,255,255,1)] p-8 sm:p-10 flex flex-col justify-between items-center text-center backface-hidden relative overflow-hidden">
                           <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600" />
                           
-                          <span className="px-3.5 py-1 bg-indigo-50/90 text-indigo-700 font-black text-[10px] uppercase tracking-widest rounded-full border border-indigo-100/60 shadow-2xs">
-                            {t('hub.flashcards.frontTitle')}
-                          </span>
+                          <div className="flex items-center justify-between w-full">
+                            <span className="px-3.5 py-1 bg-indigo-50 text-indigo-700 font-black text-[10px] uppercase tracking-widest rounded-full border border-indigo-100/80 shadow-2xs">
+                              ✨ {t('hub.flashcards.frontTitle')}
+                            </span>
+                            <span className="text-[11px] font-black text-slate-400">
+                              #{currentFlashcardIdx + 1}
+                            </span>
+                          </div>
 
-                          <p className="font-black text-base sm:text-lg text-slate-850 max-w-xs leading-relaxed my-auto">
-                            {flashcards[currentFlashcardIdx].question}
-                          </p>
+                          <div className="my-auto py-2">
+                            <p className="font-black text-lg sm:text-xl text-slate-900 leading-snug tracking-tight max-w-sm mx-auto">
+                              {flashcards[currentFlashcardIdx].question}
+                            </p>
+                          </div>
 
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-150 text-slate-400 font-extrabold text-[10px] rounded-xl shadow-2xs">
-                            <RotateCw className="w-3 h-3 text-indigo-500 animate-spin-slow" />
+                          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 font-extrabold text-xs rounded-2xl shadow-2xs transition-all">
+                            <RotateCw className="w-3.5 h-3.5 text-indigo-500" />
                             <span>{t('hub.flashcards.flipHint')}</span>
                           </div>
                         </div>
 
-                        {/* BACK CARD: Dark Luxury Style */}
-                        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white rounded-[32px] shadow-[0_20px_50px_rgba(15,23,42,0.25)] p-7 sm:p-8 flex flex-col justify-between items-center text-center backface-hidden rotateY-180 relative overflow-hidden">
+                        {/* BACK CARD: Dark Titanium Style */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A] via-[#1E1B4B] to-[#0F172A] border border-indigo-500/40 text-white rounded-[36px] shadow-[0_25px_60px_-10px_rgba(15,23,42,0.45)] p-8 sm:p-10 flex flex-col justify-between items-center text-center backface-hidden rotateY-180 relative overflow-hidden">
                           <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-400 to-indigo-400" />
 
-                          <span className="px-3.5 py-1 bg-white/10 text-white font-black text-[10px] uppercase tracking-widest rounded-full border border-white/20 shadow-2xs">
-                            {t('hub.flashcards.backTitle')}
-                          </span>
+                          <div className="flex items-center justify-between w-full">
+                            <span className="px-3.5 py-1 bg-emerald-500/20 text-emerald-300 font-black text-[10px] uppercase tracking-widest rounded-full border border-emerald-400/30 shadow-2xs">
+                              💡 {t('hub.flashcards.backTitle')}
+                            </span>
+                            <span className="text-[11px] font-black text-white/40">
+                              #{currentFlashcardIdx + 1}
+                            </span>
+                          </div>
 
-                          <p className="font-extrabold text-sm sm:text-base text-indigo-50 max-w-xs leading-relaxed my-auto">
-                            {flashcards[currentFlashcardIdx].answer}
-                          </p>
+                          <div className="my-auto py-2 overflow-y-auto max-h-44 pr-1">
+                            <p className="font-extrabold text-base sm:text-lg text-indigo-50 leading-relaxed max-w-sm mx-auto">
+                              {flashcards[currentFlashcardIdx].answer}
+                            </p>
+                          </div>
 
-                          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/15 text-white/70 font-extrabold text-[10px] rounded-xl">
-                            <RotateCw className="w-3 h-3 text-emerald-400" />
+                          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 border border-white/20 text-white/90 font-extrabold text-xs rounded-2xl shadow-2xs">
+                            <RotateCw className="w-3.5 h-3.5 text-emerald-400" />
                             <span>{t('hub.flashcards.flipBackHint')}</span>
                           </div>
                         </div>
@@ -1690,42 +1749,52 @@ function StudyHubContent() {
                     </div>
                   </div>
 
-                  {/* Mastering Action Controls Bar */}
-                  <div className="flex items-center justify-between gap-3 w-full max-w-md mt-2">
+                  {/* Mastering Action Controls Bar (High-Tactile Buttons) */}
+                  <div className="flex items-center justify-center gap-3 w-full max-w-lg mt-2 relative z-10">
                     <button
                       onClick={() => updateCardMastery(flashcards[currentFlashcardIdx].id, false)}
-                      className={`w-1/2 py-3.5 px-4 rounded-2xl text-xs font-black border-2 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs hover:scale-[1.02] ${
+                      className={`w-1/2 py-4 px-5 rounded-2xl text-xs font-black border-2 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm hover:scale-[1.02] active:scale-95 ${
                         flashcards[currentFlashcardIdx].status === 'unknown'
-                          ? 'bg-rose-100/80 border-rose-300 text-rose-700 shadow-soft-sm'
-                          : 'bg-white border-rose-200/80 text-rose-600 hover:bg-rose-50'
+                          ? 'bg-rose-100/90 border-rose-300 text-rose-700 shadow-soft-sm'
+                          : 'bg-white border-rose-200 text-rose-600 hover:bg-rose-50'
                       }`}
                     >
                       <X className="w-4 h-4 stroke-[3]" />
                       <span>{t('hub.flashcards.mastery.unknown')}</span>
+                      <kbd className="hidden sm:inline-block px-1.5 py-0.5 bg-rose-50 border border-rose-200 rounded text-[10px] text-rose-500">←</kbd>
+                    </button>
+
+                    <button
+                      onClick={() => setIsFlipped((prev) => !prev)}
+                      className="p-4 bg-white border border-slate-200 text-slate-700 hover:text-indigo-600 hover:border-indigo-200 rounded-2xl shadow-sm hover:shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer shrink-0"
+                      title="Gira carta (Spazio)"
+                    >
+                      <RotateCw className="w-5 h-5" />
                     </button>
 
                     <button
                       onClick={() => updateCardMastery(flashcards[currentFlashcardIdx].id, true)}
-                      className={`w-1/2 py-3.5 px-4 rounded-2xl text-xs font-black border-2 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs hover:scale-[1.02] ${
+                      className={`w-1/2 py-4 px-5 rounded-2xl text-xs font-black border-2 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md hover:scale-[1.02] active:scale-95 ${
                         flashcards[currentFlashcardIdx].status === 'known'
-                          ? 'bg-emerald-100/80 border-emerald-300 text-emerald-800 shadow-soft-sm'
-                          : 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700'
+                          ? 'bg-emerald-100/90 border-emerald-300 text-emerald-800 shadow-soft-sm'
+                          : 'bg-gradient-to-r from-emerald-500 to-teal-600 border-transparent text-white hover:from-emerald-600 hover:to-teal-700 shadow-emerald-500/20'
                       }`}
                     >
                       <Check className="w-4 h-4 stroke-[3]" />
                       <span>{t('hub.flashcards.mastery.known')}</span>
+                      <kbd className="hidden sm:inline-block px-1.5 py-0.5 bg-white/20 border border-white/30 rounded text-[10px] text-white">→</kbd>
                     </button>
                   </div>
 
                   {/* Navigation Arrows */}
-                  <div className="flex items-center justify-between w-full max-w-md px-2 mt-1">
+                  <div className="flex items-center justify-between w-full max-w-lg px-2 mt-1 relative z-10">
                     <button
                       disabled={currentFlashcardIdx === 0}
                       onClick={() => {
                         setIsFlipped(false)
                         setCurrentFlashcardIdx((prev) => prev - 1)
                       }}
-                      className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-500 hover:text-indigo-650 disabled:opacity-30 disabled:hover:text-slate-500 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-indigo-650 disabled:opacity-30 disabled:hover:text-slate-500 cursor-pointer transition-colors"
                     >
                       <ChevronLeft className="w-4 h-4" />
                       <span>{t('hub.flashcards.nav.prev')}</span>
@@ -1737,7 +1806,7 @@ function StudyHubContent() {
                         setIsFlipped(false)
                         setCurrentFlashcardIdx((prev) => prev + 1)
                       }}
-                      className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-500 hover:text-indigo-650 disabled:opacity-30 disabled:hover:text-slate-500 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-indigo-650 disabled:opacity-30 disabled:hover:text-slate-500 cursor-pointer transition-colors"
                     >
                       <span>{t('hub.flashcards.nav.next')}</span>
                       <ChevronRight className="w-4 h-4" />
@@ -1746,7 +1815,7 @@ function StudyHubContent() {
 
                   {/* Next Step CTA in Guided Study Mode */}
                   {isGuidedMode && (
-                    <div className="w-full max-w-md bg-gradient-to-r from-amber-50/90 to-orange-50/90 border border-amber-200/80 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left shadow-soft-sm mt-2">
+                    <div className="w-full max-w-lg bg-gradient-to-r from-amber-50/90 to-orange-50/90 border border-amber-200/80 p-5 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-left shadow-soft-sm mt-3 relative z-10">
                       <div className="flex items-center gap-3.5">
                         <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
                           2/3
