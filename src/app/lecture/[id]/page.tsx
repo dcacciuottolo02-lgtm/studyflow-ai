@@ -46,6 +46,7 @@ import {
   ArrowRight,
   Target,
   Zap,
+  RotateCw,
 } from 'lucide-react'
 
 interface Lecture {
@@ -1551,127 +1552,173 @@ function StudyHubContent() {
               ) : flashcards.length > 0 ? (
                 <div className="flex flex-col items-center gap-6">
                   
-                  {/* Header & Regeneration action */}
-                  <div className="flex justify-between items-center w-full max-w-sm px-2">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                      {t('hub.flashcards.progress', { current: currentFlashcardIdx + 1, total: flashcards.length })}
-                    </span>
-                    {userPlan === 'free' ? (
-                      <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl">
-                        ✨ Rigenerazione illimitata solo per PRO
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleGenerateModule('flashcards')}
-                        className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100/50 py-1.5 px-3 rounded-xl transition-all duration-200 cursor-pointer shadow-soft-sm hover:scale-[1.01]"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        <span>{t('hub.flashcards.regenerate')}</span>
-                      </button>
-                    )}
+                  {/* Header: Progress Bar & Regeneration */}
+                  <div className="flex flex-col gap-2.5 w-full max-w-md px-2">
+                    <div className="flex justify-between items-center w-full">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-800">
+                          Flashcard {currentFlashcardIdx + 1}
+                        </span>
+                        <span className="text-xs font-bold text-slate-400">
+                          di {flashcards.length}
+                        </span>
+                      </div>
+
+                      {userPlan === 'free' ? (
+                        <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl">
+                          ✨ PRO: Rigenerazione illimitata
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleGenerateModule('flashcards')}
+                          className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-100/50 py-1 px-2.5 rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          <span>{t('hub.flashcards.regenerate')}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden p-0.5 border border-slate-200/50">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 transition-all duration-300 shadow-xs"
+                        style={{
+                          width: `${Math.max(5, ((currentFlashcardIdx + 1) / flashcards.length) * 100)}%`,
+                        }}
+                      />
+                    </div>
                   </div>
 
-                  {/* Swipe Guidance Helper */}
-                  <div className="flex items-center justify-between w-full max-w-sm px-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <span className="flex items-center gap-1 text-rose-500">
-                      👈 Swipe Sx = Da Rivedere
-                    </span>
-                    <span className="flex items-center gap-1 text-emerald-600">
-                      Swipe Dx = Capito 👉
-                    </span>
+                  {/* Swipe Guidance Helper Pills */}
+                  <div className="flex items-center justify-between w-full max-w-md px-2 mt-1">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50/80 border border-rose-200/70 text-rose-700 font-extrabold text-[10px] shadow-2xs">
+                      <X className="w-3 h-3 stroke-[3]" />
+                      <span>Swipe Sx = Da Rivedere</span>
+                    </div>
+
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50/80 border border-emerald-200/70 text-emerald-700 font-extrabold text-[10px] shadow-2xs">
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>Swipe Dx = Capito</span>
+                    </div>
                   </div>
 
-                  {/* 3D Flashcard flip & swipe container */}
-                  <div
-                    onMouseDown={handleCardTouchStart}
-                    onMouseMove={isDragging ? handleCardTouchMove : undefined}
-                    onMouseUp={handleCardTouchEnd}
-                    onMouseLeave={isDragging ? handleCardTouchEnd : undefined}
-                    onTouchStart={handleCardTouchStart}
-                    onTouchMove={handleCardTouchMove}
-                    onTouchEnd={handleCardTouchEnd}
-                    style={{
-                      transform: `translate3d(${dragOffset.x}px, ${dragOffset.y * 0.15}px, 0) rotate(${dragOffset.x * 0.08}deg)`,
-                      transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                    }}
-                    className="w-full max-w-sm h-64 cursor-grab active:cursor-grabbing [perspective:1000px] select-none relative touch-pan-y"
-                  >
-                    {/* Visual Swipe Right Overlay Badge */}
-                    {dragOffset.x > 30 && (
-                      <div className="absolute top-4 left-4 z-30 bg-emerald-500 text-white font-black text-xs px-3.5 py-1.5 rounded-2xl shadow-xl flex items-center gap-1.5 border-2 border-white animate-in zoom-in-75 duration-100">
-                        <Check className="w-4 h-4 stroke-[3]" />
-                        <span>CAPITO 🟢</span>
-                      </div>
+                  {/* Card Deck Wrapper with Realistic Depth Layers */}
+                  <div className="relative w-full max-w-md h-72 sm:h-80 flex items-center justify-center select-none my-1">
+                    {/* Layer 3: Deepest card background */}
+                    {currentFlashcardIdx < flashcards.length - 2 && (
+                      <div className="absolute inset-x-8 bottom-1 h-full bg-slate-100/70 border border-slate-200/40 rounded-[32px] -z-20 scale-[0.90] opacity-50 shadow-sm" />
                     )}
 
-                    {/* Visual Swipe Left Overlay Badge */}
-                    {dragOffset.x < -30 && (
-                      <div className="absolute top-4 right-4 z-30 bg-rose-500 text-white font-black text-xs px-3.5 py-1.5 rounded-2xl shadow-xl flex items-center gap-1.5 border-2 border-white animate-in zoom-in-75 duration-100">
-                        <X className="w-4 h-4 stroke-[3]" />
-                        <span>DA RIVEDERE 🔴</span>
-                      </div>
+                    {/* Layer 2: Next card shadow */}
+                    {currentFlashcardIdx < flashcards.length - 1 && (
+                      <div className="absolute inset-x-4 bottom-3 h-full bg-white/90 border border-slate-200/70 rounded-[32px] -z-10 scale-[0.95] shadow-md" />
                     )}
 
+                    {/* Active Front/Back Swipe Card */}
                     <div
-                      className={`relative w-full h-full duration-300 preserve-3d pointer-events-none ${
-                        isFlipped ? 'rotateY-180' : ''
-                      }`}
+                      onMouseDown={handleCardTouchStart}
+                      onMouseMove={isDragging ? handleCardTouchMove : undefined}
+                      onMouseUp={handleCardTouchEnd}
+                      onMouseLeave={isDragging ? handleCardTouchEnd : undefined}
+                      onTouchStart={handleCardTouchStart}
+                      onTouchMove={handleCardTouchMove}
+                      onTouchEnd={handleCardTouchEnd}
+                      style={{
+                        transform: `translate3d(${dragOffset.x}px, ${dragOffset.y * 0.15}px, 0) rotate(${dragOffset.x * 0.08}deg)`,
+                        transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                      }}
+                      className="w-full h-full cursor-grab active:cursor-grabbing [perspective:1000px] relative touch-pan-y"
                     >
-                      {/* FRONT CARD: Question */}
-                      <div className="absolute inset-0 bg-white border border-slate-150 rounded-3xl shadow-soft-md p-6 flex flex-col items-center justify-center text-center backface-hidden">
-                        <span className="text-[10px] font-extrabold text-indigo-650 uppercase tracking-widest mb-3">
-                          {t('hub.flashcards.frontTitle')}
-                        </span>
-                        <p className="font-black text-sm sm:text-base text-slate-800 max-w-xs leading-snug">
-                          {flashcards[currentFlashcardIdx].question}
-                        </p>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-5 absolute bottom-4 animate-pulse">
-                          {t('hub.flashcards.flipHint')}
-                        </span>
-                      </div>
+                      {/* Floating Feedback Badge: Swipe Right */}
+                      {dragOffset.x > 25 && (
+                        <div className="absolute top-6 left-6 z-40 bg-emerald-500 text-white font-black text-xs px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-2 border-2 border-white animate-in zoom-in-75 duration-100">
+                          <Check className="w-4 h-4 stroke-[3]" />
+                          <span>CAPITO 🟢</span>
+                        </div>
+                      )}
 
-                      {/* BACK CARD: Answer */}
-                      <div className="absolute inset-0 bg-brand-gradient border border-slate-200/20 text-white rounded-3xl shadow-soft-lg p-6 flex flex-col items-center justify-center text-center backface-hidden rotateY-180">
-                        <span className="text-[10px] font-bold text-white/80 uppercase tracking-widest mb-3">
-                          {t('hub.flashcards.backTitle')}
-                        </span>
-                        <p className="font-extrabold text-sm sm:text-base max-w-xs leading-snug">
-                          {flashcards[currentFlashcardIdx].answer}
-                        </p>
-                        <span className="text-[10px] font-bold text-white/70 uppercase tracking-wider mt-5 absolute bottom-4">
-                          {t('hub.flashcards.flipBackHint')}
-                        </span>
+                      {/* Floating Feedback Badge: Swipe Left */}
+                      {dragOffset.x < -25 && (
+                        <div className="absolute top-6 right-6 z-40 bg-rose-500 text-white font-black text-xs px-4 py-2 rounded-2xl shadow-2xl flex items-center gap-2 border-2 border-white animate-in zoom-in-75 duration-100">
+                          <X className="w-4 h-4 stroke-[3]" />
+                          <span>DA RIVEDERE 🔴</span>
+                        </div>
+                      )}
+
+                      <div
+                        className={`relative w-full h-full duration-300 preserve-3d pointer-events-none ${
+                          isFlipped ? 'rotateY-180' : ''
+                        }`}
+                      >
+                        {/* FRONT CARD: Light Luxury Style */}
+                        <div className="absolute inset-0 bg-white border border-slate-200/90 rounded-[32px] shadow-[0_20px_50px_rgba(79,70,229,0.09)] p-7 sm:p-8 flex flex-col justify-between items-center text-center backface-hidden relative overflow-hidden">
+                          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600" />
+                          
+                          <span className="px-3.5 py-1 bg-indigo-50/90 text-indigo-700 font-black text-[10px] uppercase tracking-widest rounded-full border border-indigo-100/60 shadow-2xs">
+                            {t('hub.flashcards.frontTitle')}
+                          </span>
+
+                          <p className="font-black text-base sm:text-lg text-slate-850 max-w-xs leading-relaxed my-auto">
+                            {flashcards[currentFlashcardIdx].question}
+                          </p>
+
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-150 text-slate-400 font-extrabold text-[10px] rounded-xl shadow-2xs">
+                            <RotateCw className="w-3 h-3 text-indigo-500 animate-spin-slow" />
+                            <span>{t('hub.flashcards.flipHint')}</span>
+                          </div>
+                        </div>
+
+                        {/* BACK CARD: Dark Luxury Style */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 border border-indigo-500/30 text-white rounded-[32px] shadow-[0_20px_50px_rgba(15,23,42,0.25)] p-7 sm:p-8 flex flex-col justify-between items-center text-center backface-hidden rotateY-180 relative overflow-hidden">
+                          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-400 to-indigo-400" />
+
+                          <span className="px-3.5 py-1 bg-white/10 text-white font-black text-[10px] uppercase tracking-widest rounded-full border border-white/20 shadow-2xs">
+                            {t('hub.flashcards.backTitle')}
+                          </span>
+
+                          <p className="font-extrabold text-sm sm:text-base text-indigo-50 max-w-xs leading-relaxed my-auto">
+                            {flashcards[currentFlashcardIdx].answer}
+                          </p>
+
+                          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/10 border border-white/15 text-white/70 font-extrabold text-[10px] rounded-xl">
+                            <RotateCw className="w-3 h-3 text-emerald-400" />
+                            <span>{t('hub.flashcards.flipBackHint')}</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Mastering Action indicators */}
-                  <div className="flex items-center gap-3 w-full max-w-sm mt-1">
+                  {/* Mastering Action Controls Bar */}
+                  <div className="flex items-center justify-between gap-3 w-full max-w-md mt-2">
                     <button
                       onClick={() => updateCardMastery(flashcards[currentFlashcardIdx].id, false)}
-                      className={`w-1/2 py-3 px-4 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                      className={`w-1/2 py-3.5 px-4 rounded-2xl text-xs font-black border-2 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs hover:scale-[1.02] ${
                         flashcards[currentFlashcardIdx].status === 'unknown'
-                          ? 'bg-rose-50 border-rose-200 text-rose-655 shadow-soft-sm'
-                          : 'bg-white border-slate-250 text-slate-500 hover:bg-slate-50'
+                          ? 'bg-rose-100/80 border-rose-300 text-rose-700 shadow-soft-sm'
+                          : 'bg-white border-rose-200/80 text-rose-600 hover:bg-rose-50'
                       }`}
                     >
-                      {t('hub.flashcards.mastery.unknown')}
+                      <X className="w-4 h-4 stroke-[3]" />
+                      <span>{t('hub.flashcards.mastery.unknown')}</span>
                     </button>
+
                     <button
                       onClick={() => updateCardMastery(flashcards[currentFlashcardIdx].id, true)}
-                      className={`w-1/2 py-3 px-4 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                      className={`w-1/2 py-3.5 px-4 rounded-2xl text-xs font-black border-2 transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs hover:scale-[1.02] ${
                         flashcards[currentFlashcardIdx].status === 'known'
-                          ? 'bg-emerald-50 border-emerald-250 text-emerald-700 shadow-soft-sm'
-                          : 'bg-white border-slate-250 text-slate-500 hover:bg-slate-50'
+                          ? 'bg-emerald-100/80 border-emerald-300 text-emerald-800 shadow-soft-sm'
+                          : 'bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700'
                       }`}
                     >
-                      {t('hub.flashcards.mastery.known')}
+                      <Check className="w-4 h-4 stroke-[3]" />
+                      <span>{t('hub.flashcards.mastery.known')}</span>
                     </button>
                   </div>
 
                   {/* Navigation Arrows */}
-                  {/* Navigation Prev / Next Action */}
-                  <div className="flex items-center justify-between w-full max-w-sm px-2">
+                  <div className="flex items-center justify-between w-full max-w-md px-2 mt-1">
                     <button
                       disabled={currentFlashcardIdx === 0}
                       onClick={() => {
