@@ -1644,18 +1644,8 @@ function StudyHubContent() {
                     </div>
                   </div>
 
-                  {/* Card Deck Wrapper with Realistic Depth Layers */}
-                  <div className="relative w-full max-w-lg h-80 sm:h-96 flex items-center justify-center select-none my-1 z-10">
-                    {/* Layer 3: Deepest card background */}
-                    {currentFlashcardIdx < flashcards.length - 2 && (
-                      <div className="absolute inset-x-10 -bottom-5 h-full bg-slate-200/60 border border-slate-300/40 rounded-[36px] -z-20 scale-[0.88] opacity-60 shadow-xs" />
-                    )}
-
-                    {/* Layer 2: Next card shadow */}
-                    {currentFlashcardIdx < flashcards.length - 1 && (
-                      <div className="absolute inset-x-5 -bottom-2.5 h-full bg-white/90 border border-slate-200/80 rounded-[36px] -z-10 scale-[0.94] shadow-md" />
-                    )}
-
+                  {/* 3D Active Card Container */}
+                  <div className="relative w-full max-w-lg h-80 sm:h-96 flex items-center justify-center select-none my-2 z-10">
                     {/* Active Front/Back Swipe Card */}
                     <div
                       onMouseDown={handleCardTouchStart}
@@ -1692,51 +1682,51 @@ function StudyHubContent() {
                           isFlipped ? 'rotateY-180' : ''
                         }`}
                       >
-                        {/* FRONT CARD: Light Luxury Style */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white via-slate-50/30 to-white border border-slate-200/90 rounded-[36px] shadow-[0_25px_60px_-15px_rgba(79,70,229,0.12),0_0_0_1px_rgba(255,255,255,1)] p-8 sm:p-10 flex flex-col justify-between items-center text-center backface-hidden relative overflow-hidden">
+                        {/* FRONT CARD: Light Clean Luxury Style */}
+                        <div className="absolute inset-0 bg-white border border-slate-200/90 rounded-3xl shadow-soft-lg p-8 sm:p-10 flex flex-col justify-between items-center text-center backface-hidden relative overflow-hidden">
                           <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600" />
                           
                           <div className="flex items-center justify-between w-full">
                             <span className="px-3.5 py-1 bg-indigo-50 text-indigo-700 font-black text-[10px] uppercase tracking-widest rounded-full border border-indigo-100/80 shadow-2xs">
                               ✨ {t('hub.flashcards.frontTitle')}
                             </span>
-                            <span className="text-[11px] font-black text-slate-400">
+                            <span className="text-xs font-black text-slate-400">
                               #{currentFlashcardIdx + 1}
                             </span>
                           </div>
 
                           <div className="my-auto py-2">
-                            <p className="font-black text-lg sm:text-xl text-slate-900 leading-snug tracking-tight max-w-sm mx-auto">
+                            <p className="font-black text-lg sm:text-2xl text-slate-900 leading-snug tracking-tight max-w-sm mx-auto">
                               {flashcards[currentFlashcardIdx].question}
                             </p>
                           </div>
 
-                          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 font-extrabold text-xs rounded-2xl shadow-2xs transition-all">
+                          <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-indigo-600 font-extrabold text-xs rounded-2xl shadow-2xs transition-all">
                             <RotateCw className="w-3.5 h-3.5 text-indigo-500" />
                             <span>{t('hub.flashcards.flipHint')}</span>
                           </div>
                         </div>
 
                         {/* BACK CARD: Dark Titanium Style */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A] via-[#1E1B4B] to-[#0F172A] border border-indigo-500/40 text-white rounded-[36px] shadow-[0_25px_60px_-10px_rgba(15,23,42,0.45)] p-8 sm:p-10 flex flex-col justify-between items-center text-center backface-hidden rotateY-180 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-b from-[#0F172A] via-[#1E1B4B] to-[#0F172A] border border-indigo-500/40 text-white rounded-3xl shadow-soft-lg p-8 sm:p-10 flex flex-col justify-between items-center text-center backface-hidden rotateY-180 relative overflow-hidden">
                           <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-emerald-400 via-teal-400 to-indigo-400" />
 
                           <div className="flex items-center justify-between w-full">
                             <span className="px-3.5 py-1 bg-emerald-500/20 text-emerald-300 font-black text-[10px] uppercase tracking-widest rounded-full border border-emerald-400/30 shadow-2xs">
                               💡 {t('hub.flashcards.backTitle')}
                             </span>
-                            <span className="text-[11px] font-black text-white/40">
+                            <span className="text-xs font-black text-white/40">
                               #{currentFlashcardIdx + 1}
                             </span>
                           </div>
 
-                          <div className="my-auto py-2 overflow-y-auto max-h-44 pr-1">
+                          <div className="my-auto py-2 overflow-y-auto max-h-48 pr-1">
                             <p className="font-extrabold text-base sm:text-lg text-indigo-50 leading-relaxed max-w-sm mx-auto">
                               {flashcards[currentFlashcardIdx].answer}
                             </p>
                           </div>
 
-                          <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white/10 border border-white/20 text-white/90 font-extrabold text-xs rounded-2xl shadow-2xs">
+                          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 border border-white/20 text-white/90 font-extrabold text-xs rounded-2xl shadow-2xs">
                             <RotateCw className="w-3.5 h-3.5 text-emerald-400" />
                             <span>{t('hub.flashcards.flipBackHint')}</span>
                           </div>
