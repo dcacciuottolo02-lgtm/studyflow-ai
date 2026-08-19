@@ -35,47 +35,47 @@ export async function POST(req: NextRequest) {
 
     const genAI = new GoogleGenerativeAI(geminiApiKey)
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3.6-flash',
       generationConfig: {
         responseMimeType: 'application/json',
       },
     })
 
     const prompt = `
-Sei un assistente universitario esperto nell'analisi di Syllabus e programmi accademici.
-Analizza con estrema precisione il seguente testo del Syllabus universitario:
+Sei un assistente universitario avanzato esperto nell'analisi di Syllabus e programmi di studio universitari.
+Analizza con estrema precisione, completezza e rigore il seguente testo del Syllabus universitario:
 
 """
-${syllabusText.slice(0, 15000)}
+${syllabusText.slice(0, 20000)}
 """
 
-Estrai le informazioni in formato JSON strutturato seguendo questo schema esatto:
+Estrai TUTTE le informazioni disponibili in formato JSON strutturato seguendo questo schema:
 {
-  "course_name": string | null, // Nome del corso se rilevato
-  "professor": string | null,   // Nome del docente se rilevato
-  "cfu": number | null,         // Numero di crediti formativi universitari (CFU) se rilevato
+  "course_name": string | null, // Nome completo del corso/insegnamento
+  "professor": string | null,   // Nome del docente o professore (es. "Prof. Mario Rossi")
+  "cfu": number | null,         // Numero di crediti formativi (CFU / ECTS)
   "chapters": [
     {
-      "title": string,          // Titolo pulito e descrittivo del capitolo/modulo/lezione (es. "Modulo 1: Introduzione e Basi")
+      "title": string,          // Titolo chiaro e ben formattato del capitolo, modulo o lezione (es. "Settimana 1: Introduzione al Machine Learning")
       "order_index": number     // 1, 2, 3...
     }
   ],
   "exam_milestones": [
     {
-      "name": string,          // Nome prova (es. "Midterm / 1° Parziale", "Progetto Finale", "Appello d'Esame")
+      "name": string,          // Nome prova (es. "Midterm / 1° Parziale", "2° Parziale", "Progetto Finale", "Appello d'Esame Finale")
       "type": "midterm" | "final" | "project",
-      "date": string | null    // Data in formato YYYY-MM-DD se specificata nel testo, altrimenti null
+      "date": string | null    // Data OBBLIGATORIAMENTE in formato ISO standard YYYY-MM-DD (es. "2026-10-25"). Se nel testo c'è una data come "25 Ottobre" o "15/11/2026", convertila sempre in YYYY-MM-DD. Se l'anno non è specificato, assumi l'anno corrente (2026 o 2027). Se non c'è una data specifica, metti null.
     }
   ],
-  "grading_policy": string | null, // Metodi di valutazione, percentuali o pesi (es. "Midterm 30%, Progetto 30%, Finale 40%")
-  "materials_info": string | null  // Libri consigliati, slide o software richiesti
+  "grading_policy": string | null, // Criteri e percentuali di voto (es. "Midterm: 30%, Progetto di gruppo: 30%, Esame Finale: 40%")
+  "materials_info": string | null  // Libri di testo, letture consigliate o slide
 }
 
-Regole importanti:
-1. I capitoli ("chapters") devono essere ordinati, chiari e coprire i macro-argomenti del corso (massimo 20-25 capitoli/moduli).
-2. Se nel testo sono presenti date o riferimenti a Midterm / Esoneri / Parziali / Finali / Progetti di gruppo, estraili accuratamente in "exam_milestones".
-3. Se ci sono criteri di valutazione (grading policy), riassumili in modo chiaro in "grading_policy".
-4. Restituisci SOLO il JSON valido.
+Regole fondamentali:
+1. Estrai TUTTI i moduli/capitoli/argomenti delle lezioni in modo esaustivo, ordinato e pulito.
+2. Cerca attentamente nel testo qualsiasi riferimento a esami, prove parziali, midterm, test intermedi, consegne progetti o date finali.
+3. Se trovi date (es. "Midterm: 28/10", "Final Exam: 15 Dicembre 2026"), convertile TASSATIVAMENTE nel formato "YYYY-MM-DD" in modo che possano essere lette dai calendari.
+4. Restituisci ESCLUSIVAMENTE il JSON valido.
 `
 
     const result = await model.generateContent(prompt)

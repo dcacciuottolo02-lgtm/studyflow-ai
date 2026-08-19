@@ -295,6 +295,13 @@ export default function CourseModal({
           date: m.date || '',
         }))
         setExamMilestones(mappedMilestones)
+
+        const finalItem = mappedMilestones.find((m) => m.type === 'final' && m.date)
+        if (finalItem && finalItem.date) {
+          setFinalExamDate(finalItem.date)
+        } else if (mappedMilestones[0]?.date) {
+          setFinalExamDate(mappedMilestones[0].date)
+        }
       }
 
       // 3. Pre-populate course meta if empty
@@ -322,10 +329,8 @@ export default function CourseModal({
         } prove d'esame e criteri di valutazione.`
       )
     } catch (err: any) {
-      console.warn('AI parsing failed, falling back to local extractor:', err)
-      const extracted = extractChaptersFromText(syllabusText)
-      setSyllabusTopics(extracted)
-      setAiStatusMsg('Capitoli estratti con parser standard.')
+      console.warn('AI parsing error:', err)
+      setError(`Errore AI: ${err.message || 'Analisi non riuscita. Riprova con un testo più breve o verifica la connessione.'}`)
     } finally {
       setIsAnalyzingSyllabus(false)
     }
