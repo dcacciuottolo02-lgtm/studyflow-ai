@@ -183,6 +183,7 @@ function StudyHubContent() {
 
   // Generating single module status
   const [generatingModule, setGeneratingModule] = useState<string | null>(null)
+  const [uploadingSlide, setUploadingSlide] = useState(false)
 
   const isSummaryRequested = jobs.some((j) => j.job_type === 'summary')
   const isFlashcardsRequested = jobs.some((j) => j.job_type === 'flashcards')
@@ -889,7 +890,6 @@ function StudyHubContent() {
     }
   }
 
-  const [uploadingSlide, setUploadingSlide] = useState(false)
   const handleUploadSlidesDirectly = async (file: File) => {
     if (!lecture) return
     setUploadingSlide(true)
