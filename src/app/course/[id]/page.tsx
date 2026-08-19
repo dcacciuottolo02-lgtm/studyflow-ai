@@ -483,6 +483,67 @@ export default function CourseDetailPage() {
       {/* Main Container */}
       <main className="max-w-5xl mx-auto px-6 py-8 flex flex-col gap-6">
         
+        {/* Top Academic Tools Strip (Archivio & Syllabus) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          
+          {/* 1. Master Course Archive Button */}
+          <button
+            onClick={() => setIsArchiveModalOpen(true)}
+            className="bg-white hover:bg-slate-50/90 border border-slate-150/90 p-4.5 rounded-3xl shadow-soft-sm flex items-center justify-between gap-4 transition-all duration-200 hover:border-indigo-300 group cursor-pointer text-left hover:scale-[1.01]"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0 group-hover:scale-105 transition-transform">
+                <Zap className="w-5 h-5 fill-white" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                    Archivio Flashcard & Quiz
+                  </span>
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                </div>
+                <span className="text-xs text-slate-400 font-semibold truncate mt-0.5">
+                  {masteryStats.totalCards > 0
+                    ? `${masteryStats.knownCards}/${masteryStats.totalCards} note • Ripeti tutto il corso`
+                    : 'Ripeti tutte le flashcard e i quiz'}
+                </span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-all shrink-0">
+              <ChevronRight className="w-4 h-4" />
+            </div>
+          </button>
+
+          {/* 2. Syllabus & Exam Info Pop-up Button */}
+          <button
+            onClick={() => setIsSyllabusModalOpen(true)}
+            className="bg-white hover:bg-slate-50/90 border border-slate-150/90 p-4.5 rounded-3xl shadow-soft-sm flex items-center justify-between gap-4 transition-all duration-200 hover:border-indigo-300 group cursor-pointer text-left hover:scale-[1.01]"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-100 shrink-0 group-hover:scale-105 transition-transform">
+                <BookOpen className="w-5 h-5" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                    Syllabus & Info Esame
+                  </span>
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                </div>
+                <span className="text-xs text-slate-400 font-semibold truncate mt-0.5">
+                  {course.syllabus_topics && course.syllabus_topics.length > 0
+                    ? `${course.syllabus_topics.length} moduli • Criteri e materiali`
+                    : 'Apri programma e dettagli'}
+                </span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-all shrink-0">
+              <ChevronRight className="w-4 h-4" />
+            </div>
+          </button>
+
+        </div>
+
         {/* Responsive Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
@@ -742,62 +803,6 @@ export default function CourseDetailPage() {
                 )}
               </div>
             </div>
-
-            {/* Master Course Archive Trigger Button */}
-            <button
-              onClick={() => setIsArchiveModalOpen(true)}
-              className="w-full bg-gradient-to-r from-indigo-50/80 via-purple-50/40 to-white hover:bg-slate-50/90 border border-indigo-150 p-5 rounded-3xl shadow-soft-sm flex items-center justify-between gap-4 transition-all duration-200 hover:border-indigo-300 group cursor-pointer text-left hover:scale-[1.01]"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0 group-hover:scale-105 transition-transform">
-                  <Zap className="w-5 h-5 fill-white" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-black text-slate-900 group-hover:text-indigo-650 transition-colors truncate">
-                      Archivio Flashcard & Quiz
-                    </span>
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                  </div>
-                  <span className="text-xs text-slate-500 font-semibold truncate mt-0.5">
-                    {masteryStats.totalCards > 0
-                      ? `${masteryStats.knownCards}/${masteryStats.totalCards} note • Ripeti tutto il corso`
-                      : 'Ripeti tutte le flashcard e i quiz'}
-                  </span>
-                </div>
-              </div>
-              <div className="w-8 h-8 rounded-xl bg-white border border-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-50 transition-all shrink-0">
-                <ChevronRight className="w-4 h-4" />
-              </div>
-            </button>
-
-            {/* Syllabus & Exam Info Pop-up Trigger Button */}
-            <button
-              onClick={() => setIsSyllabusModalOpen(true)}
-              className="w-full bg-white hover:bg-slate-50/90 border border-slate-100 p-5 rounded-3xl shadow-soft-sm flex items-center justify-between gap-4 transition-all duration-200 hover:border-indigo-200 group cursor-pointer text-left hover:scale-[1.01]"
-            >
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100/60 flex items-center justify-center text-indigo-600 group-hover:bg-brand-gradient group-hover:text-white transition-all shadow-soft-xs shrink-0">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-extrabold text-slate-900 group-hover:text-indigo-650 transition-colors truncate">
-                      Syllabus & Info Esame
-                    </span>
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                  </div>
-                  <span className="text-xs text-slate-400 font-semibold truncate mt-0.5">
-                    {course.syllabus_topics && course.syllabus_topics.length > 0
-                      ? `${course.syllabus_topics.length} moduli • Criteri e materiali`
-                      : 'Apri programma e dettagli'}
-                  </span>
-                </div>
-              </div>
-              <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-all shrink-0">
-                <ChevronRight className="w-4 h-4" />
-              </div>
-            </button>
 
             {/* Course Academic Mastery Card */}
             <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
