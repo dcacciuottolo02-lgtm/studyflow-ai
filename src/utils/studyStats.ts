@@ -258,7 +258,7 @@ export function buildMultiCourseTodayQueue(
   const now = Date.now()
 
   lectures.forEach((lecture) => {
-    if (!['completed', 'ready', 'uploaded'].includes(lecture.status)) return
+    if (lecture.status === 'deleted' || lecture.status === 'failed') return
 
     const courseInfo = (Array.isArray(lecture.courses) ? lecture.courses[0] : lecture.courses) || {}
     const sm = studyMaterialsMap[lecture.id]
@@ -295,7 +295,7 @@ export function buildMultiCourseTodayQueue(
       })
     }
     // Case 2: Fresh Lesson (< 24h - 48h) needing first consolidation
-    else if (daysAgo <= 2 && (hasSummary || hasFlashcards)) {
+    else if (daysAgo <= 2) {
       queue.push({
         id: `${lecture.id}-fresh`,
         lectureId: lecture.id,
@@ -311,7 +311,7 @@ export function buildMultiCourseTodayQueue(
         hasSummary,
         flashcardsCount: flashcardsList.length,
         hasQuiz,
-        targetTab: 'summary',
+        targetTab: hasSummary ? 'summary' : hasFlashcards ? 'flashcards' : 'summary',
       })
     }
     // Case 3: Day 3 to 5 Spaced Repetition (Quiz Active Recall)
@@ -352,6 +352,26 @@ export function buildMultiCourseTodayQueue(
         flashcardsCount: unseenCardsCount,
         hasQuiz,
         targetTab: 'flashcards',
+      })
+    }
+    // Case 5: Standard Periodic Review
+    else {
+      queue.push({
+        id: `${lecture.id}-review`,
+        lectureId: lecture.id,
+        lectureTitle: lecture.title || 'Lezione',
+        courseId: courseInfo.id || lecture.course_id,
+        courseName: courseInfo.name || 'Corso',
+        courseColor: courseInfo.color || '#6366f1',
+        taskType: 'summary',
+        urgencyScore: Math.max(50, 70 - daysAgo),
+        urgencyReason: '🔄 Ripasso programmato',
+        urgencyBadge: 'review',
+        estimatedMinutes: 5,
+        hasSummary,
+        flashcardsCount: flashcardsList.length,
+        hasQuiz,
+        targetTab: 'summary',
       })
     }
   })
