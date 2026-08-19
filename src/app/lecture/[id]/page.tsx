@@ -302,10 +302,13 @@ export default function StudyHubPage() {
         lectureData = baseLec
       }
 
-      const rawCourse = lectureData.courses as any
+      const rawCourse = Array.isArray(lectureData.courses)
+        ? lectureData.courses[0]
+        : (lectureData.courses as any)
       const courseName = rawCourse?.name || 'Corso'
-      const topicsList = (rawCourse?.syllabus_topics as any[]) || []
-      const matchedTopic = topicsList.find((t: any) => t.id === lectureData.syllabus_topic_id)
+      const rawTopics = rawCourse?.syllabus_topics
+      const topicsList = Array.isArray(rawTopics) ? rawTopics : []
+      const matchedTopic = topicsList.find((t: any) => t && t.id === lectureData.syllabus_topic_id)
       const syllabusTopicTitle = matchedTopic?.title || null
 
       setLecture({
@@ -331,8 +334,10 @@ export default function StudyHubPage() {
         .select('job_type, status, error_message')
         .eq('lecture_id', lectureId)
 
-      if (jobsData) {
+      if (Array.isArray(jobsData)) {
         setJobs(jobsData as AIJob[])
+      } else {
+        setJobs([])
       }
 
       // Fetch Study Material record
@@ -351,7 +356,14 @@ export default function StudyHubPage() {
           .maybeSingle()
 
         if (summaryData) {
-          setSummary(summaryData as Summary)
+          const rawConcepts = summaryData.key_concepts
+          const keyConceptsList = Array.isArray(rawConcepts)
+            ? rawConcepts.map((c: any) => (typeof c === 'string' ? c : c?.title || String(c)))
+            : []
+          setSummary({
+            content: summaryData.content || '',
+            key_concepts: keyConceptsList,
+          })
         }
 
         // Fetch Flashcard set first (latest version)
@@ -371,7 +383,7 @@ export default function StudyHubPage() {
             .eq('flashcard_set_id', fcSet.id)
             .order('order_index', { ascending: true })
 
-          if (fcData) {
+          if (Array.isArray(fcData)) {
             setFlashcards(fcData as Flashcard[])
           }
         }
@@ -393,8 +405,14 @@ export default function StudyHubPage() {
             .eq('quiz_set_id', qSet.id)
             .order('order_index', { ascending: true })
 
-          if (quizData) {
-            setQuizQuestions(quizData as QuizQuestion[])
+          if (Array.isArray(quizData)) {
+            const mappedQuiz = quizData.map((q: any) => ({
+              id: q.id,
+              question: q.question || '',
+              options: Array.isArray(q.options) ? q.options : [],
+              correct_option_index: q.correct_option_index ?? 0,
+            }))
+            setQuizQuestions(mappedQuiz)
           }
         }
       }
@@ -846,7 +864,7 @@ export default function StudyHubPage() {
     return matchedJob.status
   }
 
-  const isFailedPipeline = lecture.status === 'failed' || jobs.every((j) => j.status === 'failed')
+  const isFailedPipeline = lecture?.status === 'failed' || (Array.isArray(jobs) && jobs.length > 0 && jobs.every((j) => j?.status === 'failed'))
 
   const handleDownloadSlides = async () => {
     if (!lecture?.slides_url) return
@@ -1296,7 +1314,7 @@ export default function StudyHubPage() {
                   </div>
 
                   {/* Key Concepts List card */}
-                  {summary.key_concepts && summary.key_concepts.length > 0 && (
+                  {Array.isArray(summary?.key_concepts) && summary.key_concepts.length > 0 && (
                     <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-md text-left flex flex-col gap-3.5">
                       <h3 className="font-black text-base text-slate-855 pl-0.5">
                         {t('hub.summary.concepts')}
@@ -1307,7 +1325,7 @@ export default function StudyHubPage() {
                             key={idx}
                             className="bg-indigo-50/70 border border-indigo-100/40 text-indigo-655 px-4 py-2 rounded-2xl text-xs font-extrabold hover:bg-brand-gradient hover:text-white hover:border-transparent transition-all duration-200 cursor-default"
                           >
-                            {concept}
+                            {typeof concept === 'string' ? concept : (concept as any)?.title || String(concept)}
                           </span>
                         ))}
                       </div>
@@ -1605,7 +1623,7 @@ export default function StudyHubPage() {
 
                         {/* Option Selectors List */}
                         <div className="flex flex-col gap-3">
-                          {activeQuestion.options.map((option, idx) => {
+                          {(Array.isArray(activeQuestion?.options) ? activeQuestion.options : []).map((option, idx) => {
                             const isSelected = quizAnswers[activeQuestion.id] === idx
                             const showCorrectIndicator = isQuizSubmitted && idx === activeQuestion.correct_option_index
                             const showMistakeIndicator = isQuizSubmitted && isSelected && idx !== activeQuestion.correct_option_index
