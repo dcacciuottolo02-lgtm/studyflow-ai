@@ -71,15 +71,30 @@ export async function getOrCreateUserStats(
       let updatedStats = { ...data }
       let needsSync = false
 
-      // Check if last_study_date was before yesterday (streak broken)
-      if (data.last_study_date && data.last_study_date < yesterdayStr) {
+      if (!data.last_study_date) {
+        updatedStats.last_study_date = todayStr
         updatedStats.current_streak = 1
+        updatedStats.longest_streak = Math.max(data.longest_streak || 1, 1)
+        needsSync = true
+      } else if (data.last_study_date === yesterdayStr) {
+        // Studied yesterday, now active today -> increment streak
+        updatedStats.current_streak = (data.current_streak || 0) + 1
+        updatedStats.longest_streak = Math.max(data.longest_streak || 1, updatedStats.current_streak)
+        updatedStats.last_study_date = todayStr
         updatedStats.completed_today_count = 0
         needsSync = true
-      } else if (data.last_study_date === yesterdayStr && data.completed_today_count > 0) {
-        // Rolled over to new day, reset today's count
+      } else if (data.last_study_date < yesterdayStr) {
+        // Streak broken (>1 day gap) -> restart streak at 1
+        updatedStats.current_streak = 1
+        updatedStats.last_study_date = todayStr
         updatedStats.completed_today_count = 0
         needsSync = true
+      } else if (data.last_study_date === todayStr) {
+        // Already active today
+        if (data.current_streak < 1) {
+          updatedStats.current_streak = 1
+          needsSync = true
+        }
       }
 
       if (needsSync) {
@@ -87,6 +102,8 @@ export async function getOrCreateUserStats(
           .from('user_study_stats')
           .update({
             current_streak: updatedStats.current_streak,
+            longest_streak: updatedStats.longest_streak,
+            last_study_date: updatedStats.last_study_date,
             completed_today_count: updatedStats.completed_today_count,
           })
           .eq('user_id', userId)
@@ -155,19 +172,19 @@ export async function recordStudyActivity(
     let newTodayCount = (current.completed_today_count || 0) + 1
 
     if (current.last_study_date === yesterdayStr) {
-      newStreak += 1
+      newStreak = (current.current_streak || 0) + 1
       if (newStreak > newLongest) {
         newLongest = newStreak
       }
       newTodayCount = 1
-    } else if (current.last_study_date < yesterdayStr) {
+    } else if (current.last_study_date && current.last_study_date < yesterdayStr) {
       newStreak = 1
       newTodayCount = 1
     }
 
     const flashcardsDelta = activityType === 'flashcard' ? extraCount : 0
     const quizDelta = activityType === 'quiz' ? extraCount : 0
-    const minutesDelta = activityType === 'lecture_view' ? 6 : activityType === 'quiz' ? 5 : 3
+    const minutesDelta = activityType === 'recording' ? 15 : activityType === 'lecture_view' ? 6 : activityType === 'quiz' ? 5 : 3
 
     const updatePayload = {
       user_id: userId,

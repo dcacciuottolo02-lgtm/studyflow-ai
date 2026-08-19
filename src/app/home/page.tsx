@@ -322,39 +322,20 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Streak & Daily Goal Badges */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Streak Badge */}
-            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-200/80 rounded-2xl shadow-xs">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-xs">
-                <Flame className="w-4.5 h-4.5 animate-pulse fill-white" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-black text-slate-900 leading-tight">
-                  {stats.current_streak} {t('home.today.streak')}
-                </span>
-                <span className="text-[10px] text-amber-700/80 font-bold">
-                  {stats.current_streak > 1 ? '🔥 Ritmo perfetto' : 'Inizia la serie!'}
-                </span>
-              </div>
+          {/* Streak Badge */}
+          <div className="flex items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-200/80 rounded-2xl shadow-xs">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 text-white flex items-center justify-center shadow-xs shrink-0">
+              <Flame className="w-4.5 h-4.5 animate-pulse fill-white" />
             </div>
-
-            {/* Daily Goal Badge */}
-            <div className="flex items-center gap-2.5 px-4 py-2.5 bg-slate-50 border border-slate-200/70 rounded-2xl">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center">
-                <Target className="w-4.5 h-4.5" />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-black text-slate-900 leading-tight">
-                  {stats.completed_today_count}/{stats.daily_goal_target} Obiettivi
-                </span>
-                <div className="w-20 bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1">
-                  <div
-                    className="bg-brand-gradient h-full rounded-full transition-all duration-500"
-                    style={{ width: `${goalPercentage}%` }}
-                  />
-                </div>
-              </div>
+            <div className="flex flex-col">
+              <span className="text-xs font-black text-slate-900 leading-tight">
+                {stats.current_streak} {stats.current_streak === 1 ? (language === 'it' ? 'Giorno di Serie' : 'Day Streak') : (language === 'it' ? 'Giorni di Serie' : 'Days Streak')}
+              </span>
+              <span className="text-[10px] text-amber-700/90 font-bold">
+                {stats.current_streak > 1
+                  ? (language === 'it' ? `🔥 ${stats.current_streak} giorni consecutivi!` : `🔥 ${stats.current_streak} days streak!`)
+                  : (language === 'it' ? 'Inizia la tua serie oggi!' : 'Start your streak today!')}
+              </span>
             </div>
           </div>
         </div>

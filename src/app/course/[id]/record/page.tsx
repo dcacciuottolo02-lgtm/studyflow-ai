@@ -6,6 +6,7 @@ import { useState, useEffect, useRef, Suspense } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
+import { recordStudyActivity } from '@/utils/studyStats'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
 import Toast from '@/components/Toast'
 import BottomNav from '@/components/BottomNav'
@@ -491,6 +492,9 @@ function RecordLectureContent() {
       if (!response.ok) {
         console.warn('[Record Pipeline Trigger] Non-OK status returned from process route:', response.status)
       }
+
+      // Record study activity to increment daily streak
+      recordStudyActivity(supabase, user.id, 'recording').catch(() => {})
 
       // Upload completed, redirect to study hub
       router.push(`/lecture/${lectureId}`)
