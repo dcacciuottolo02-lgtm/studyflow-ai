@@ -1848,83 +1848,95 @@ function StudyHubContent() {
                   <p className="text-sm font-semibold text-slate-500">{t('hub.quiz.generating')}</p>
                 </div>
               ) : quizQuestions.length > 0 ? (
-                <div className="bg-white border border-slate-100 p-6 sm:p-8 rounded-3xl shadow-soft-md text-left">
+                /* Luxury Quiz Stage Arena */
+                <div className="w-full bg-gradient-to-b from-slate-50/90 via-indigo-50/20 to-white border border-slate-200/80 rounded-[36px] p-5 sm:p-8 flex flex-col gap-6 shadow-soft-md relative overflow-hidden">
                   
-                  {/* Quiz header with refresh button */}
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-5">
-                    <h3 className="font-extrabold text-sm text-slate-700">{t('hub.quiz.title')}</h3>
-                    {userPlan === 'free' ? (
-                      <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-xl">
-                        ✨ Rigenerazione illimitata solo per PRO
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleGenerateModule('quiz')}
-                        className="text-xs font-bold text-indigo-650 hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>{t('hub.quiz.regenerate')}</span>
-                      </button>
-                    )}
+                  {/* Ambient Background Glow Orbs */}
+                  <div className="absolute -top-16 -left-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+                  <div className="absolute -bottom-16 -right-16 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                  {/* Header: Title, Progress Bar & Regeneration */}
+                  <div className="flex flex-col gap-3 w-full relative z-10">
+                    <div className="flex justify-between items-center w-full">
+                      <div className="flex items-center gap-2.5">
+                        <span className="px-3 py-1 bg-white border border-slate-200/80 rounded-full text-xs font-black text-slate-900 shadow-2xs">
+                          {currentQuizWizardStep + 1} / {quizQuestions.length}
+                        </span>
+                        <span className="text-xs font-bold text-slate-500 hidden sm:inline">
+                          {Math.round(((currentQuizWizardStep + 1) / quizQuestions.length) * 100)}% completato
+                        </span>
+                      </div>
+
+                      {userPlan === 'free' ? (
+                        <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-xl">
+                          ✨ PRO: Rigenerazione
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleGenerateModule('quiz')}
+                          className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 bg-white hover:bg-indigo-50 border border-indigo-100 py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-2xs hover:scale-[1.02]"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>{t('hub.quiz.regenerate')}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Glowing Progress Bar */}
+                    <div className="w-full bg-slate-200/60 h-2 rounded-full overflow-hidden p-0.5 border border-white/80 shadow-inner">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600 transition-all duration-300 shadow-sm"
+                        style={{
+                          width: `${Math.max(5, ((currentQuizWizardStep + 1) / quizQuestions.length) * 100)}%`,
+                        }}
+                      />
+                    </div>
                   </div>
                   
                   {/* Scoreboard block after submission */}
                   {isQuizSubmitted && quizScore !== null && (
-                    <div className="bg-gradient-to-r from-slate-50 to-indigo-50/50 p-6 rounded-2xl flex flex-col items-center text-center gap-3 border border-indigo-100/50 mb-6">
-                      <Award className="w-10 h-10 text-indigo-650" />
-                      <div className="flex flex-col gap-0.5">
-                        <h4 className="font-extrabold text-base text-slate-805">{t('hub.quiz.completed')}</h4>
-                        <p className="text-2xl font-black text-brand-gradient mt-1">
+                    <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-7 rounded-3xl flex flex-col items-center text-center gap-4 border border-indigo-500/30 shadow-soft-lg relative z-10">
+                      <div className="w-14 h-14 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-amber-400">
+                        <Award className="w-8 h-8" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <h4 className="font-extrabold text-lg text-white">{t('hub.quiz.completed')}</h4>
+                        <p className="text-3xl font-black text-emerald-400 mt-1">
                           {t('hub.quiz.score', { score: quizScore, total: quizQuestions.length })}
                         </p>
                       </div>
-                      <div className="flex flex-col gap-2 mt-2 w-full max-w-xs">
-                        <div className="flex items-center gap-2 w-full">
-                          <button
-                            onClick={handleResetQuiz}
-                            className="w-1/2 bg-white border border-slate-250 text-slate-700 font-extrabold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-soft-sm"
-                          >
-                            {t('hub.quiz.retry')}
-                          </button>
-                          <button
-                            onClick={() => {
-                              setQuizFilter('mistakes')
-                              setCurrentQuizWizardStep(0)
-                            }}
-                            className="w-1/2 bg-brand-gradient hover-bg-brand-gradient text-white font-extrabold py-2 px-3 rounded-xl text-xs cursor-pointer shadow-md shadow-indigo-100"
-                          >
-                            {t('hub.quiz.reviewErrors')}
-                          </button>
-                        </div>
-                        {userPlan === 'free' ? (
-                          <span className="w-full text-center text-[10px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 py-2 px-3 rounded-xl">
-                            ✨ Rigenerazione illimitata solo per PRO
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleGenerateModule('quiz')}
-                            className="w-full bg-slate-900 hover:bg-slate-800 text-white font-extrabold py-2.5 px-3 rounded-xl text-xs cursor-pointer shadow-sm hover:shadow flex items-center justify-center gap-1"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            <span>{t('hub.quiz.regenerate')}</span>
-                          </button>
-                        )}
+                      <div className="flex flex-col sm:flex-row items-center gap-3 mt-2 w-full max-w-md">
+                        <button
+                          onClick={handleResetQuiz}
+                          className="w-full sm:w-1/2 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-extrabold py-3 px-4 rounded-2xl text-xs cursor-pointer transition-all hover:scale-[1.02]"
+                        >
+                          {t('hub.quiz.retry')}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setQuizFilter('mistakes')
+                            setCurrentQuizWizardStep(0)
+                          }}
+                          className="w-full sm:w-1/2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:opacity-95 text-white font-black py-3 px-4 rounded-2xl text-xs cursor-pointer shadow-md transition-all hover:scale-[1.02]"
+                        >
+                          {t('hub.quiz.reviewErrors')}
+                        </button>
                       </div>
                     </div>
                   )}
 
                   {/* Filter tabs if submitted */}
                   {isQuizSubmitted && (
-                    <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2 relative z-10">
                       <button
                         onClick={() => {
                           setQuizFilter('all')
                           setCurrentQuizWizardStep(0)
                         }}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                        className={`text-xs font-black px-4 py-2 rounded-xl border transition-all cursor-pointer ${
                           quizFilter === 'all'
-                            ? 'bg-indigo-50 border-indigo-100 text-indigo-700 font-extrabold'
-                            : 'bg-white border-slate-200 text-slate-500'
+                            ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
                         {t('hub.quiz.filter.allWithCount', { count: quizQuestions.length })}
@@ -1934,10 +1946,10 @@ function StudyHubContent() {
                           setQuizFilter('mistakes')
                           setCurrentQuizWizardStep(0)
                         }}
-                        className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer ${
+                        className={`text-xs font-black px-4 py-2 rounded-xl border transition-all cursor-pointer ${
                           quizFilter === 'mistakes'
-                            ? 'bg-indigo-50 border-indigo-100 text-indigo-700 font-extrabold'
-                            : 'bg-white border-slate-200 text-slate-500'
+                            ? 'bg-rose-600 border-rose-600 text-white shadow-xs'
+                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                         }`}
                       >
                         {t('hub.quiz.filter.mistakesWithCount', {
@@ -1955,15 +1967,15 @@ function StudyHubContent() {
 
                     if (filteredQuestions.length === 0) {
                       return (
-                        <div className="text-center py-10 flex flex-col items-center gap-2">
-                          <CheckCircle className="w-10 h-10 text-emerald-500" />
-                          <p className="text-sm font-extrabold text-slate-850">{t('hub.quiz.noErrors')}</p>
+                        <div className="text-center py-10 flex flex-col items-center gap-2 bg-white rounded-3xl border border-slate-200 p-8 shadow-soft-sm relative z-10">
+                          <CheckCircle className="w-12 h-12 text-emerald-500" />
+                          <p className="text-base font-extrabold text-slate-800">{t('hub.quiz.noErrors')}</p>
                           <button
                             onClick={() => {
                               setQuizFilter('all')
                               setCurrentQuizWizardStep(0)
                             }}
-                            className="text-xs text-indigo-650 hover:underline font-bold mt-1 cursor-pointer"
+                            className="text-xs text-indigo-650 hover:underline font-black mt-2 cursor-pointer"
                           >
                             {t('hub.quiz.reviewAll')}
                           </button>
@@ -1972,17 +1984,25 @@ function StudyHubContent() {
                     }
 
                     const activeQuestion = filteredQuestions[currentQuizWizardStep]
+                    const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F']
 
                     return (
-                      <div className="flex flex-col gap-5">
-                        {/* Question title index */}
-                        <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-0.5">
-                          <span>{t('hub.step.quiz.desc')}</span>
-                          <span>{t('hub.quiz.questionCounter', { current: currentQuizWizardStep + 1, total: filteredQuestions.length })}</span>
+                      /* Main Question Card */
+                      <div className="bg-white border border-slate-200/90 rounded-3xl shadow-soft-lg p-6 sm:p-9 relative overflow-hidden flex flex-col gap-6 z-10 text-left">
+                        <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600" />
+
+                        {/* Top Category & Question counter */}
+                        <div className="flex justify-between items-center w-full">
+                          <span className="px-3.5 py-1 bg-indigo-50 text-indigo-700 font-black text-[10px] uppercase tracking-widest rounded-full border border-indigo-100/80 shadow-2xs">
+                            ✨ {t('hub.step.quiz.desc')}
+                          </span>
+                          <span className="text-xs font-black text-slate-400">
+                            #{currentQuizWizardStep + 1} di {filteredQuestions.length}
+                          </span>
                         </div>
 
                         {/* Question Text */}
-                        <h4 className="font-extrabold text-base text-slate-800 leading-snug pl-0.5">
+                        <h4 className="font-black text-lg sm:text-2xl text-slate-900 leading-snug tracking-tight">
                           {activeQuestion.question}
                         </h4>
 
@@ -2003,34 +2023,47 @@ function StudyHubContent() {
                                     [activeQuestion.id]: idx,
                                   }))
                                 }
-                                className={`w-full text-left p-4.5 rounded-2xl border text-sm font-semibold transition-all leading-normal relative flex items-start gap-3 cursor-pointer ${
+                                className={`w-full text-left p-4 sm:p-5 rounded-2xl border-2 text-sm sm:text-base font-bold transition-all leading-relaxed relative flex items-center gap-3.5 cursor-pointer shadow-2xs hover:scale-[1.01] active:scale-[0.99] ${
                                   showCorrectIndicator
-                                    ? 'bg-emerald-50 border-emerald-250 text-emerald-700 font-extrabold shadow-soft-sm'
+                                    ? 'bg-emerald-50/90 border-emerald-500 text-emerald-950 font-black shadow-soft-sm'
                                     : showMistakeIndicator
-                                    ? 'bg-rose-50 border-rose-250 text-rose-700 font-extrabold shadow-soft-sm'
+                                    ? 'bg-rose-50/90 border-rose-400 text-rose-950 font-black shadow-soft-sm'
                                     : isSelected
-                                    ? 'bg-indigo-50 border-indigo-400 text-indigo-750 font-extrabold'
-                                    : 'bg-white border-slate-200 hover:border-slate-350 text-slate-650 hover:bg-slate-50/50'
+                                    ? 'bg-indigo-50/80 border-indigo-500 text-indigo-950 font-black shadow-soft-sm'
+                                    : 'bg-white border-slate-200/90 hover:border-indigo-200 hover:bg-slate-50/70 text-slate-800'
                                 }`}
                               >
+                                {/* Option Letter Badge */}
+                                <div
+                                  className={`w-8 h-8 rounded-xl font-black text-xs flex items-center justify-center shrink-0 transition-all ${
+                                    showCorrectIndicator
+                                      ? 'bg-emerald-600 text-white'
+                                      : showMistakeIndicator
+                                      ? 'bg-rose-600 text-white'
+                                      : isSelected
+                                      ? 'bg-indigo-600 text-white shadow-xs'
+                                      : 'bg-slate-100 border border-slate-200 text-slate-600'
+                                  }`}
+                                >
+                                  {optionLetters[idx] || idx + 1}
+                                </div>
+
                                 <span className="grow">{option}</span>
                                 
                                 {/* Right Indicator Icons */}
-                                {showCorrectIndicator && <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />}
-                                {showMistakeIndicator && <X className="w-5 h-5 text-rose-500 shrink-0" />}
+                                {showCorrectIndicator && <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 stroke-[2.5]" />}
+                                {showMistakeIndicator && <X className="w-5 h-5 text-rose-500 shrink-0 stroke-[2.5]" />}
                               </button>
                             )
                           })}
                         </div>
 
-                        {/* Explanation detail card removed since quiz_questions does not contain explanation */}
-
                         {/* Step Navigation Controls */}
-                        <div className="flex items-center justify-between border-t border-slate-150 pt-4 mt-2">
+                        <div className="flex items-center justify-between border-t border-slate-100 pt-5 mt-2">
                           <button
                             disabled={currentQuizWizardStep === 0}
                             onClick={() => setCurrentQuizWizardStep((prev) => prev - 1)}
-                            className="inline-flex items-center gap-1.5 text-xs font-extrabold text-slate-500 hover:text-indigo-650 disabled:opacity-30 cursor-pointer"
+                            className="inline-flex items-center gap-1.5 text-xs font-black text-slate-500 hover:text-indigo-650 disabled:opacity-30 disabled:hover:text-slate-500 cursor-pointer transition-colors"
                           >
                             <ChevronLeft className="w-4 h-4" />
                             <span>{t('hub.flashcards.nav.prev')}</span>
@@ -2041,7 +2074,7 @@ function StudyHubContent() {
                             !isQuizSubmitted ? (
                               <button
                                 onClick={handleSubmitQuiz}
-                                className="bg-brand-gradient hover-bg-brand-gradient text-white font-extrabold py-2.5 px-4.5 rounded-xl text-xs shadow-md shadow-indigo-100 cursor-pointer hover:scale-[1.01]"
+                                className="bg-brand-gradient hover:opacity-95 text-white font-black py-3 px-6 rounded-2xl text-xs shadow-md shadow-indigo-100 cursor-pointer hover:scale-105 transition-all"
                               >
                                 {t('hub.quiz.submit')}
                               </button>
@@ -2049,7 +2082,7 @@ function StudyHubContent() {
                           ) : (
                             <button
                               onClick={() => setCurrentQuizWizardStep((prev) => prev + 1)}
-                              className="inline-flex items-center gap-1.5 text-xs font-extrabold text-indigo-650 hover:underline cursor-pointer"
+                              className="inline-flex items-center gap-1.5 text-xs font-black text-indigo-650 hover:underline cursor-pointer"
                             >
                               <span>{t('hub.quiz.next')}</span>
                               <ChevronRight className="w-4 h-4" />
