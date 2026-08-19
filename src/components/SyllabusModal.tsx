@@ -2,6 +2,7 @@
 
 'use client'
 
+import { useState } from 'react'
 import {
   X,
   BookOpen,
@@ -11,11 +12,9 @@ import {
   Edit3,
   Calendar,
   Sparkles,
-  CheckCircle2,
   Flame,
-  Layers,
+  Check,
   GraduationCap,
-  Laptop,
 } from 'lucide-react'
 import { SyllabusTopic, ExamMilestone } from './CourseModal'
 
@@ -48,10 +47,12 @@ export default function SyllabusModal({
   gradingPolicy,
   materialsInfo,
 }: SyllabusModalProps) {
+  const [activeSection, setActiveSection] = useState<'program' | 'exams' | 'grading' | 'materials'>('program')
+
   if (!isOpen) return null
 
-  // Helper to parse comma/semicolon/newline-separated text into clean items
-  const parseBulletList = (text?: string | null) => {
+  // Helper to parse text into clean items
+  const parseItems = (text?: string | null) => {
     if (!text) return []
     return text
       .split(/[,;\n]+/)
@@ -59,271 +60,258 @@ export default function SyllabusModal({
       .filter((s) => s.length > 1)
   }
 
-  const gradingList = parseBulletList(gradingPolicy)
-  const materialsList = parseBulletList(materialsInfo)
+  const gradingList = parseItems(gradingPolicy)
+  const materialsList = parseItems(materialsInfo)
 
   return (
-    <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
-      <div className="bg-white border border-slate-150/90 w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-md z-50 flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+      <div className="bg-white w-full max-w-2xl rounded-[32px] shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200">
         
-        {/* 1. Modal Header (Luxury Gradient & Course Identity) */}
-        <div className="px-6 py-5 border-b border-slate-100/90 flex items-center justify-between bg-gradient-to-r from-slate-50 via-indigo-50/20 to-white relative overflow-hidden">
-          {/* Subtle Ambient Glow */}
-          <div
-            className="absolute -right-12 -top-12 w-36 h-36 rounded-full opacity-15 blur-2xl pointer-events-none"
-            style={{ backgroundColor: courseColor || '#6366F1' }}
-          />
-
-          <div className="flex items-center gap-4 min-w-0 z-10">
+        {/* Header */}
+        <div className="px-8 pt-7 pb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3.5 min-w-0">
             <div
-              className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-base font-black shadow-md shrink-0 ring-4 ring-white"
+              className="w-11 h-11 rounded-2xl flex items-center justify-center text-white text-base font-black shrink-0 shadow-sm"
               style={{ backgroundColor: courseColor || '#6366F1' }}
             >
               {courseName.substring(0, 2).toUpperCase()}
             </div>
-            
             <div className="flex flex-col min-w-0 text-left">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-black text-lg text-slate-900 tracking-tight truncate">
-                  {courseName}
-                </h3>
-                {cfu && (
-                  <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-extrabold rounded-lg border border-slate-200/80">
-                    {cfu} CFU
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-400 font-semibold truncate flex items-center gap-1.5 mt-0.5">
-                {professor && <span className="text-slate-600 font-bold">Prof. {professor}</span>}
-                {professor && <span>•</span>}
-                <span className="flex items-center gap-1 text-indigo-600 font-bold">
-                  <Sparkles className="w-3 h-3" />
-                  <span>Dati Ufficiali Syllabus</span>
-                </span>
+              <h3 className="font-black text-xl text-slate-900 tracking-tight truncate">
+                {courseName}
+              </h3>
+              <p className="text-xs text-slate-400 font-semibold mt-0.5">
+                {professor ? `Prof. ${professor}` : 'Corso Universitario'} {cfu ? `• ${cfu} CFU` : ''}
               </p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-2xl transition-all cursor-pointer z-10 shrink-0"
-            title="Chiudi"
+            className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-full transition-all cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* 2. Modal Scrollable Content */}
-        <div className="p-6 overflow-y-auto max-h-[62vh] flex flex-col gap-6 text-left bg-slate-50/40">
-          
-          {/* SEZIONE 1: PROGRAMMA DELLE LEZIONI (SYLLABUS) */}
-          <section className="bg-white border border-slate-150/80 p-5 rounded-3xl shadow-soft-xs flex flex-col gap-3.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <BookOpen className="w-4 h-4" />
-                </div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Programma & Capitoli Ufficiali
-                </h4>
-              </div>
-              <span className="text-[10px] font-extrabold px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-xl border border-indigo-100/80">
-                {syllabusTopics.length} Moduli Estratti
-              </span>
-            </div>
+        {/* Section Navigation Tabs (Segmented Control) */}
+        <div className="px-8 py-2 flex items-center gap-2 border-b border-slate-100 overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => setActiveSection('program')}
+            className={`px-4 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeSection === 'program'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Programma ({syllabusTopics.length})</span>
+          </button>
 
-            {syllabusTopics.length > 0 ? (
-              <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
-                {syllabusTopics.map((topic, idx) => (
-                  <div
-                    key={topic.id || idx}
-                    className="p-3 bg-slate-50/70 hover:bg-indigo-50/40 border border-slate-150/80 hover:border-indigo-200/80 rounded-2xl flex items-center justify-between gap-3 transition-all duration-150 group"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-6 h-6 rounded-lg bg-white border border-slate-200 text-slate-700 font-black text-[11px] flex items-center justify-center shrink-0 shadow-xs group-hover:border-indigo-200 group-hover:text-indigo-600 transition-colors">
-                        {String(idx + 1).padStart(2, '0')}
-                      </span>
-                      <span className="text-xs font-bold text-slate-800 group-hover:text-indigo-950 transition-colors leading-snug">
-                        {topic.title}
-                      </span>
-                    </div>
-                    <span className="text-[9px] font-extrabold px-2 py-0.5 bg-white border border-slate-200 text-slate-500 rounded-lg shrink-0">
-                      Modulo
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-6 text-center bg-slate-50/60 border border-dashed border-slate-200 rounded-2xl flex flex-col items-center gap-2">
-                <BookOpen className="w-7 h-7 text-slate-300" />
-                <p className="text-xs text-slate-500 font-semibold">Nessun capitolo estratto.</p>
-                <button
-                  onClick={() => {
-                    onClose()
-                    onOpenEdit()
-                  }}
-                  className="text-xs font-black text-indigo-600 hover:underline cursor-pointer"
-                >
-                  + Incolla Syllabus con AI
-                </button>
-              </div>
-            )}
-          </section>
+          <button
+            onClick={() => setActiveSection('exams')}
+            className={`px-4 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeSection === 'exams'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5" />
+            <span>Tappe Esame ({examMilestones.length || (examDate ? 1 : 0)})</span>
+          </button>
 
-          {/* SEZIONE 2: TAPPE D'ESAME & MIDTERM */}
-          {(examMilestones.length > 0 || examDate) && (
-            <section className="bg-white border border-slate-150/80 p-5 rounded-3xl shadow-soft-xs flex flex-col gap-3.5">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-                  <Award className="w-4 h-4" />
-                </div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Tappe d'Esame, Parziali & Progetti
-                </h4>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {examMilestones.map((m) => {
-                  const days = m.date
-                    ? Math.ceil(
-                        (new Date(m.date).getTime() - new Date().setHours(0, 0, 0, 0)) /
-                          (1000 * 60 * 60 * 24)
-                      )
-                    : null
-                  const isMidterm = m.type === 'midterm'
-
-                  return (
-                    <div
-                      key={m.id}
-                      className={`p-3.5 rounded-2xl border flex items-center justify-between gap-3 shadow-soft-xs ${
-                        isMidterm
-                          ? 'bg-amber-500/5 border-amber-200/80 text-amber-950'
-                          : 'bg-indigo-500/5 border-indigo-200/80 text-indigo-950'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className={`w-7 h-7 rounded-xl text-white flex items-center justify-center shrink-0 shadow-xs ${
-                            isMidterm ? 'bg-amber-500' : 'bg-indigo-600'
-                          }`}
-                        >
-                          <Award className="w-3.5 h-3.5" />
-                        </div>
-                        <div className="flex flex-col min-w-0 text-left">
-                          <span className="text-[10px] font-black uppercase tracking-wider truncate">
-                            {m.name}
-                          </span>
-                          <span className="text-xs font-bold text-slate-800">
-                            {m.date
-                              ? new Date(m.date).toLocaleDateString('it-IT', {
-                                  day: 'numeric',
-                                  month: 'short',
-                                  year: 'numeric',
-                                })
-                              : 'Da definire'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {days !== null && (
-                        <span
-                          className={`text-[11px] font-black px-2.5 py-1 rounded-xl bg-white border shrink-0 shadow-xs ${
-                            isMidterm
-                              ? 'border-amber-200 text-amber-800'
-                              : 'border-indigo-200 text-indigo-800'
-                          }`}
-                        >
-                          {days > 0 ? `-${days} gg` : days === 0 ? 'Oggi!' : 'Passato'}
-                        </span>
-                      )}
-                    </div>
-                  )
-                })}
-
-                {examMilestones.length === 0 && examDate && (
-                  <div className="col-span-1 sm:col-span-2 p-3.5 bg-indigo-500/5 border border-indigo-200/80 rounded-2xl flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <Flame className="w-4 h-4 text-amber-500" />
-                      <span className="text-xs font-bold text-slate-800">
-                        Appello d'Esame Finale: {new Date(examDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
+          {gradingPolicy && (
+            <button
+              onClick={() => setActiveSection('grading')}
+              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                activeSection === 'grading'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70'
+              }`}
+            >
+              <BookmarkCheck className="w-3.5 h-3.5" />
+              <span>Valutazione %</span>
+            </button>
           )}
 
-          {/* SEZIONE 3: CRITERI DI VALUTAZIONE (GRADING POLICY) */}
-          {gradingPolicy && (
-            <section className="bg-white border border-slate-150/80 p-5 rounded-3xl shadow-soft-xs flex flex-col gap-3.5">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                  <BookmarkCheck className="w-4 h-4" />
-                </div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Criteri di Valutazione & Pesi %
-                </h4>
-              </div>
+          {materialsInfo && (
+            <button
+              onClick={() => setActiveSection('materials')}
+              className={`px-4 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                activeSection === 'materials'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/70'
+              }`}
+            >
+              <PackageCheck className="w-3.5 h-3.5" />
+              <span>Materiali</span>
+            </button>
+          )}
+        </div>
 
-              {gradingList.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {gradingList.map((item, idx) => (
+        {/* Section Views (Organic, Clean, Breathing Room) */}
+        <div className="p-8 overflow-y-auto max-h-[56vh] flex flex-col text-left">
+          
+          {/* 1. PROGRAMMA / CAPITOLI */}
+          {activeSection === 'program' && (
+            <div className="flex flex-col">
+              {syllabusTopics.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                  {syllabusTopics.map((topic, idx) => (
                     <div
-                      key={idx}
-                      className="px-3.5 py-2 bg-emerald-50/60 border border-emerald-200/80 rounded-2xl text-xs font-bold text-emerald-950 flex items-center gap-2 shadow-soft-xs"
+                      key={topic.id || idx}
+                      className="py-4.5 first:pt-1 last:pb-1 flex items-start gap-4 transition-colors group"
                     >
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                      <span>{item}</span>
+                      <span className="text-sm font-black text-slate-300 group-hover:text-indigo-600 transition-colors w-6 pt-0.5 shrink-0">
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <div className="flex flex-col gap-1 grow">
+                        <span className="text-sm font-bold text-slate-900 leading-snug">
+                          {topic.title}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-400">
+                          Modulo Didattico • Programma Ufficiale
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-xs text-slate-700 font-semibold bg-slate-50 p-3 rounded-2xl border border-slate-200">
-                  {gradingPolicy}
-                </p>
+                <div className="py-12 text-center flex flex-col items-center gap-3">
+                  <p className="text-sm text-slate-400 font-semibold">Nessun capitolo presente nel programma.</p>
+                  <button
+                    onClick={() => {
+                      onClose()
+                      onOpenEdit()
+                    }}
+                    className="text-xs font-black text-indigo-600 hover:underline"
+                  >
+                    + Configura Syllabus con AI
+                  </button>
+                </div>
               )}
-            </section>
+            </div>
           )}
 
-          {/* SEZIONE 4: MATERIALI DI STUDIO & SOFTWARE */}
-          {materialsInfo && (
-            <section className="bg-white border border-slate-150/80 p-5 rounded-3xl shadow-soft-xs flex flex-col gap-3.5">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-                  <Laptop className="w-4 h-4" />
-                </div>
-                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">
-                  Materiali di Studio & Strumenti
-                </h4>
-              </div>
+          {/* 2. TAPPE D'ESAME & PARZIALI */}
+          {activeSection === 'exams' && (
+            <div className="flex flex-col gap-4">
+              {examMilestones.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  {examMilestones.map((m) => {
+                    const days = m.date
+                      ? Math.ceil(
+                          (new Date(m.date).getTime() - new Date().setHours(0, 0, 0, 0)) /
+                            (1000 * 60 * 60 * 24)
+                        )
+                      : null
+                    const isMidterm = m.type === 'midterm'
 
-              <div className="flex flex-col gap-2">
-                {materialsList.map((tool, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 bg-slate-50/70 border border-slate-150/80 rounded-2xl flex items-start gap-2.5 text-xs font-semibold text-slate-700"
-                  >
-                    <span className="text-purple-600 font-black mt-0.5">•</span>
-                    <span>{tool}</span>
+                    return (
+                      <div
+                        key={m.id}
+                        className="py-4 px-5 rounded-2xl bg-slate-50 flex items-center justify-between gap-4"
+                      >
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                              {m.name}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">
+                              {isMidterm ? 'Parziale' : 'Esame'}
+                            </span>
+                          </div>
+                          <span className="text-xs text-slate-500 font-semibold">
+                            {m.date
+                              ? new Date(m.date).toLocaleDateString('it-IT', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric',
+                                })
+                              : 'Data da concordare'}
+                          </span>
+                        </div>
+
+                        {days !== null && (
+                          <span
+                            className={`text-xs font-black px-3 py-1 rounded-xl ${
+                              isMidterm
+                                ? 'bg-amber-100/80 text-amber-900'
+                                : 'bg-indigo-100/80 text-indigo-900'
+                            }`}
+                          >
+                            {days > 0 ? `-${days} giorni` : days === 0 ? 'Oggi!' : 'Passato'}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : examDate ? (
+                <div className="py-5 px-6 rounded-2xl bg-indigo-50/70 flex items-center justify-between">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs font-black text-indigo-950 uppercase tracking-wider">
+                      Appello d'Esame Finale
+                    </span>
+                    <span className="text-sm font-bold text-slate-800">
+                      {new Date(examDate).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </section>
+                </div>
+              ) : (
+                <div className="py-12 text-center text-sm text-slate-400 font-semibold">
+                  Nessuna data di esame o parziale configurata.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 3. CRITERI DI VALUTAZIONE */}
+          {activeSection === 'grading' && (
+            <div className="flex flex-col gap-3">
+              {gradingList.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="py-3.5 px-4 rounded-2xl bg-slate-50/80 flex items-center gap-3"
+                >
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="text-xs font-bold text-slate-800 leading-relaxed">
+                    {item}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 4. MATERIALI & SOFTWARE */}
+          {activeSection === 'materials' && (
+            <div className="flex flex-col gap-3">
+              {materialsList.map((tool, idx) => (
+                <div
+                  key={idx}
+                  className="py-3.5 px-4 rounded-2xl bg-slate-50/80 flex items-center gap-3"
+                >
+                  <span className="text-slate-300 font-black">•</span>
+                  <span className="text-xs font-semibold text-slate-800 leading-relaxed">
+                    {tool}
+                  </span>
+                </div>
+              ))}
+            </div>
           )}
 
         </div>
 
-        {/* 3. Modal Footer Actions */}
-        <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-between">
+        {/* Footer */}
+        <div className="px-8 py-5 border-t border-slate-100 flex items-center justify-between bg-white">
           <button
             onClick={() => {
               onClose()
               onOpenEdit()
             }}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-extrabold text-xs rounded-2xl transition-all cursor-pointer shadow-soft-xs hover:border-slate-300"
+            className="text-xs font-black text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer flex items-center gap-1.5"
           >
-            <Edit3 className="w-3.5 h-3.5 text-slate-500" />
+            <Edit3 className="w-3.5 h-3.5" />
             <span>Modifica o Incolla Nuovo Syllabus</span>
           </button>
 
