@@ -81,16 +81,16 @@ export default function ConceptRecoveryModal({
       // 1. Get lectures query
       let lecturesQuery = supabase
         .from('lectures')
-        .select('id, title, course_id, courses(name, color)')
+        .select('id, title, course_id')
         .is('deleted_at', null)
 
       if (courseId) {
         lecturesQuery = lecturesQuery.eq('course_id', courseId)
       }
 
-      const { data: lecturesData } = await lecturesQuery
+      const { data: lecturesData, error: lecErr } = await lecturesQuery
 
-      if (!lecturesData || lecturesData.length === 0) {
+      if (lecErr || !lecturesData || lecturesData.length === 0) {
         setConcepts([])
         setWeakCards([])
         setLoading(false)
@@ -132,12 +132,15 @@ export default function ConceptRecoveryModal({
           
           // Flashcards analysis for this lecture
           const allCardsForLec: any[] = []
-          const fcSets = sm.flashcard_sets || []
+          const rawFcSets = sm.flashcard_sets
+          const fcSets = Array.isArray(rawFcSets) ? rawFcSets : rawFcSets ? [rawFcSets] : []
+
           fcSets.forEach((set: any) => {
-            const cards = set.flashcards || []
+            const rawCards = set?.flashcards
+            const cards = Array.isArray(rawCards) ? rawCards : rawCards ? [rawCards] : []
             cards.forEach((c: any) => {
               allCardsForLec.push(c)
-              if (c.status === 'unknown') {
+              if (c?.status === 'unknown') {
                 extractedWeakCards.push({
                   id: c.id,
                   question: c.question,
@@ -150,17 +153,18 @@ export default function ConceptRecoveryModal({
           })
 
           const totalLecCards = allCardsForLec.length
-          const knownLecCards = allCardsForLec.filter((c) => c.status === 'known').length
+          const knownLecCards = allCardsForLec.filter((c) => c?.status === 'known').length
           const lecAccuracy =
             totalLecCards > 0 ? Math.round((knownLecCards / totalLecCards) * 100) : 50
 
           // Summaries key concepts
-          const sumList = sm.summaries || []
+          const rawSums = sm.summaries
+          const sumList = Array.isArray(rawSums) ? rawSums : rawSums ? [rawSums] : []
           sumList.forEach((sum: any) => {
-            const rawConcepts = sum.key_concepts || []
+            const rawConcepts = sum?.key_concepts || []
             if (Array.isArray(rawConcepts)) {
               rawConcepts.forEach((rc: any, idx: number) => {
-                const cTitle = typeof rc === 'string' ? rc : rc.title || `Concetto ${idx + 1}`
+                const cTitle = typeof rc === 'string' ? rc : rc?.title || `Concetto ${idx + 1}`
                 const status =
                   lecAccuracy >= 75 ? 'strong' : lecAccuracy >= 50 ? 'moderate' : 'weak'
 

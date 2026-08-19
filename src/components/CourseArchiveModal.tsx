@@ -140,9 +140,11 @@ export default function CourseArchiveModal({
           const lecTitle = lectureMap.get(sm.lecture_id) || 'Lezione'
           
           // Flashcards
-          const fcSets = sm.flashcard_sets || []
+          const rawFcSets = sm.flashcard_sets
+          const fcSets = Array.isArray(rawFcSets) ? rawFcSets : rawFcSets ? [rawFcSets] : []
           fcSets.forEach((set: any) => {
-            const cards = set.flashcards || []
+            const rawCards = set?.flashcards
+            const cards = Array.isArray(rawCards) ? rawCards : rawCards ? [rawCards] : []
             cards.forEach((c: any) => {
               aggregatedCards.push({
                 id: c.id,
@@ -156,14 +158,16 @@ export default function CourseArchiveModal({
           })
 
           // Quiz questions
-          const qSets = sm.quiz_sets || []
+          const rawQSets = sm.quiz_sets
+          const qSets = Array.isArray(rawQSets) ? rawQSets : rawQSets ? [rawQSets] : []
           qSets.forEach((set: any) => {
-            const questions = set.quiz_questions || []
+            const rawQuestions = set?.quiz_questions
+            const questions = Array.isArray(rawQuestions) ? rawQuestions : rawQuestions ? [rawQuestions] : []
             questions.forEach((q: any) => {
               aggregatedQuestions.push({
                 id: q.id,
                 question: q.question,
-                options: q.options || [],
+                options: Array.isArray(q.options) ? q.options : [],
                 correct_option_index: q.correct_option_index ?? 0,
                 lectureId: sm.lecture_id,
                 lectureTitle: lecTitle,

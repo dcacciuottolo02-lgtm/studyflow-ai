@@ -47,12 +47,12 @@ interface ExamModeModalProps {
   syllabusTopics?: SyllabusTopic[]
   schedule?: ScheduleItem[]
   lectures: LectureItem[]
-  masteryStats: {
-    totalCards: number
-    knownCards: number
-    unknownCards: number
-    totalQuizzes: number
-    completedLectures: number
+  masteryStats?: {
+    totalCards?: number
+    knownCards?: number
+    unknownCards?: number
+    totalQuizzes?: number
+    completedLectures?: number
   }
   onOpenRecord: () => void
   onOpenRecovery: () => void
@@ -79,23 +79,26 @@ export default function ExamModeModal({
 }: ExamModeModalProps) {
   const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>('auto')
 
-  if (!isOpen) return null
+  const safeMilestones = Array.isArray(examMilestones) ? examMilestones : []
+  const safeSyllabus = Array.isArray(syllabusTopics) ? syllabusTopics : []
+  const safeLectures = Array.isArray(lectures) ? lectures : []
+  const safeStats = masteryStats || { totalCards: 0, knownCards: 0, unknownCards: 0 }
 
   // 1. Identify Target Exam Date (Next Milestone or Final Exam)
   const targetMilestone = useMemo(() => {
     if (selectedMilestoneId !== 'auto') {
-      return examMilestones.find((m) => m.id === selectedMilestoneId) || null
+      return safeMilestones.find((m) => m?.id === selectedMilestoneId) || null
     }
     // Auto find earliest future milestone
     const today = new Date().setHours(0, 0, 0, 0)
-    const futureMilestones = [...examMilestones]
-      .filter((m) => m.date && new Date(m.date).getTime() >= today)
+    const futureMilestones = [...safeMilestones]
+      .filter((m) => m?.date && !isNaN(new Date(m.date).getTime()) && new Date(m.date).getTime() >= today)
       .sort((a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime())
 
     if (futureMilestones.length > 0) {
       return futureMilestones[0]
     }
-    if (examDate) {
+    if (examDate && !isNaN(new Date(examDate).getTime())) {
       return {
         id: 'final',
         name: "Appello d'Esame Finale",
@@ -104,44 +107,46 @@ export default function ExamModeModal({
       }
     }
     return null
-  }, [examMilestones, examDate, selectedMilestoneId])
+  }, [safeMilestones, examDate, selectedMilestoneId])
 
   // Calculate days remaining to target exam
   const daysRemaining = useMemo(() => {
     if (!targetMilestone?.date) return null
-    const diff = new Date(targetMilestone.date).getTime() - new Date().setHours(0, 0, 0, 0)
+    const time = new Date(targetMilestone.date).getTime()
+    if (isNaN(time)) return null
+    const diff = time - new Date().setHours(0, 0, 0, 0)
     return Math.ceil(diff / (1000 * 60 * 60 * 24))
   }, [targetMilestone])
 
   // 2. Syllabus Coverage calculation (Progressive ingestion)
-  const totalSyllabusCount = syllabusTopics.length || (lectures.length > 0 ? lectures.length : 1)
+  const totalSyllabusCount = safeSyllabus.length || (safeLectures.length > 0 ? safeLectures.length : 1)
   const coveredTopicsCount = useMemo(() => {
-    // Count how many syllabus topics have at least one lecture linked or completed
-    if (syllabusTopics.length === 0) return lectures.length
-    const linkedIds = new Set(lectures.map((l) => l.chapter_topic_id).filter(Boolean))
-    return Math.min(syllabusTopics.length, Math.max(linkedIds.size, lectures.length))
-  }, [syllabusTopics, lectures])
+    if (safeSyllabus.length === 0) return safeLectures.length
+    const linkedIds = new Set(safeLectures.map((l) => l?.chapter_topic_id).filter(Boolean))
+    return Math.min(safeSyllabus.length, Math.max(linkedIds.size, safeLectures.length))
+  }, [safeSyllabus, safeLectures])
 
-  const coveragePercent = Math.min(100, Math.round((coveredTopicsCount / totalSyllabusCount) * 100))
+  const coveragePercent = Math.min(100, Math.round((coveredTopicsCount / Math.max(1, totalSyllabusCount)) * 100))
 
   // 3. Flashcards retention %
+  const totalCards = safeStats.totalCards || 0
+  const knownCards = safeStats.knownCards || 0
   const flashcardRetentionPercent =
-    masteryStats.totalCards > 0
-      ? Math.round((masteryStats.knownCards / masteryStats.totalCards) * 100)
-      : lectures.length > 0
+    totalCards > 0
+      ? Math.round((knownCards / totalCards) * 100)
+      : safeLectures.length > 0
       ? 50
       : 0
 
   // 4. Overall Exam Readiness Score Formula (Weighted)
   const readinessScore = useMemo(() => {
-    // 45% Syllabus Coverage + 40% Flashcard Retention + 15% Active Lectures count
     const score = Math.round(
       coveragePercent * 0.45 +
         flashcardRetentionPercent * 0.4 +
-        Math.min(100, (lectures.length / Math.max(1, totalSyllabusCount)) * 100) * 0.15
+        Math.min(100, (safeLectures.length / Math.max(1, totalSyllabusCount)) * 100) * 0.15
     )
     return Math.min(100, Math.max(0, score))
-  }, [coveragePercent, flashcardRetentionPercent, lectures.length, totalSyllabusCount])
+  }, [coveragePercent, flashcardRetentionPercent, safeLectures.length, totalSyllabusCount])
 
   // 5. Determine Current Adaptive Study Phase based on realistic semester timeline (3-4 months)
   const currentPhase = useMemo(() => {
@@ -184,6 +189,8 @@ export default function ExamModeModal({
       accentColor: 'text-emerald-600 bg-emerald-50 border-emerald-200',
     }
   }, [daysRemaining])
+
+  if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200">
@@ -275,7 +282,7 @@ export default function ExamModeModal({
               <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 pt-0.5">
                 <span>🟢 Copertura Syllabus: {coveragePercent}%</span>
                 <span>⚡ Flashcard Note: {flashcardRetentionPercent}%</span>
-                <span>📚 {lectures.length} Lezioni Caricate</span>
+                <span>📚 {safeLectures.length} Lezioni Caricate</span>
               </div>
             </div>
           </div>
@@ -364,12 +371,12 @@ export default function ExamModeModal({
             </div>
 
             <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1">
-              {syllabusTopics.length > 0 ? (
-                syllabusTopics.map((topic, idx) => {
+              {safeSyllabus.length > 0 ? (
+                safeSyllabus.map((topic, idx) => {
                   const isCovered = idx < coveredTopicsCount
                   return (
                     <div
-                      key={topic.id || idx}
+                      key={topic?.id || idx}
                       className={`p-3 rounded-2xl border flex items-center justify-between gap-3 text-xs ${
                         isCovered
                           ? 'bg-emerald-50/50 border-emerald-200/80 text-emerald-950 font-bold'
@@ -386,7 +393,7 @@ export default function ExamModeModal({
                         >
                           {idx + 1}
                         </span>
-                        <span className="truncate">{topic.title}</span>
+                        <span className="truncate">{topic?.title || `Modulo ${idx + 1}`}</span>
                       </div>
 
                       <span

@@ -765,7 +765,7 @@ export default function CourseDetailPage() {
               ) : null}
 
               {/* Exam Mode Trigger Button */}
-              {(course.exam_milestones?.length || course.exam_date) ? (
+              {((Array.isArray(course.exam_milestones) && course.exam_milestones.length > 0) || Boolean(course.exam_date)) ? (
                 <button
                   onClick={() => setIsExamModeOpen(true)}
                   className="w-full py-2.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-indigo-500/10 hover:bg-amber-100/60 border border-amber-200/80 text-amber-950 font-black text-xs flex items-center justify-between transition-all cursor-pointer shadow-2xs group"
