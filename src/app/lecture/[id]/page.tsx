@@ -40,6 +40,7 @@ import {
   Clock,
   Trash2,
   Paperclip,
+  Upload,
 } from 'lucide-react'
 
 interface Lecture {
@@ -870,6 +871,39 @@ export default function StudyHubPage() {
     }
   }
 
+  const [uploadingSlide, setUploadingSlide] = useState(false)
+  const handleUploadSlidesDirectly = async (file: File) => {
+    if (!lecture) return
+    setUploadingSlide(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Non autenticato')
+
+      const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+      const slidesPath = `${user.id}/${lecture.course_id}/slides_${Date.now()}_${cleanName}`
+      const { error: upErr } = await supabase.storage
+        .from('lecture-resources')
+        .upload(slidesPath, file, { upsert: true })
+
+      if (upErr) throw upErr
+
+      const slidesUrl = `lecture-resources/${slidesPath}`
+      const { error: dbErr } = await supabase
+        .from('lectures')
+        .update({ slides_url: slidesUrl, slides_name: file.name })
+        .eq('id', lecture.id)
+
+      if (dbErr) throw dbErr
+
+      setLecture(prev => prev ? ({ ...prev, slides_url: slidesUrl, slides_name: file.name }) : null)
+    } catch (err: any) {
+      alert(err.message || 'Errore nel caricamento delle slide')
+    } finally {
+      setUploadingSlide(false)
+    }
+  }
+
   return (    <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 transition-colors duration-300">
       
       {/* 1. Header Navigation */}
@@ -926,28 +960,73 @@ export default function StudyHubPage() {
                    <span className="font-extrabold text-slate-800 truncate max-w-[140px]">{lecture.course_name}</span>
                  </div>
 
-                 {lecture.syllabus_topic_title && (
-                   <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
-                     <span>Capitolo</span>
+                 {/* Capitolo del Syllabus */}
+                 <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
+                   <span>Capitolo</span>
+                   {lecture.syllabus_topic_title ? (
                      <span className="font-extrabold text-indigo-600 truncate max-w-[140px]" title={lecture.syllabus_topic_title}>
                        {lecture.syllabus_topic_title}
                      </span>
-                   </div>
-                 )}
+                   ) : (
+                     <span className="text-[10px] text-slate-400 font-bold">Generale</span>
+                   )}
+                 </div>
 
-                 {lecture.slides_url && (
-                   <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
-                     <span>Slide Docente</span>
-                     <button
-                       type="button"
-                       onClick={handleDownloadSlides}
-                       className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-xl border border-indigo-200/60 transition-colors cursor-pointer"
-                     >
-                       <Paperclip className="w-3 h-3 text-indigo-600" />
-                       <span className="truncate max-w-[100px]">{lecture.slides_name || 'Scarica Slide'}</span>
-                     </button>
-                   </div>
-                 )}
+                 {/* Slide del Docente */}
+                 <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
+                   <span>Slide Docente</span>
+                   {lecture.slides_url ? (
+                     <div className="flex items-center gap-1.5">
+                       <button
+                         type="button"
+                         onClick={handleDownloadSlides}
+                         className="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-xl border border-indigo-200/60 transition-colors cursor-pointer"
+                         title={lecture.slides_name || 'Scarica Slide'}
+                       >
+                         <Paperclip className="w-3 h-3 text-indigo-600" />
+                         <span className="truncate max-w-[90px]">{lecture.slides_name || 'Scarica'}</span>
+                       </button>
+                       <label className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer" title="Sostituisci slide">
+                         <Upload className="w-3 h-3" />
+                         <input
+                           type="file"
+                           accept=".pdf,.ppt,.pptx,.doc,.docx"
+                           className="hidden"
+                           onChange={(e) => {
+                             if (e.target.files && e.target.files[0]) {
+                               handleUploadSlidesDirectly(e.target.files[0])
+                             }
+                           }}
+                         />
+                       </label>
+                     </div>
+                   ) : (
+                     <label className="inline-flex items-center gap-1 px-2 py-1 bg-slate-50 hover:bg-indigo-50 border border-dashed border-slate-300 hover:border-indigo-300 text-slate-600 hover:text-indigo-600 rounded-xl text-[10px] font-extrabold cursor-pointer transition-colors">
+                       {uploadingSlide ? (
+                         <>
+                           <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
+                           <span>Caricamento...</span>
+                         </>
+                       ) : (
+                         <>
+                           <Paperclip className="w-3 h-3" />
+                           <span>+ Allega Slide</span>
+                         </>
+                       )}
+                       <input
+                         type="file"
+                         accept=".pdf,.ppt,.pptx,.doc,.docx"
+                         disabled={uploadingSlide}
+                         className="hidden"
+                         onChange={(e) => {
+                           if (e.target.files && e.target.files[0]) {
+                             handleUploadSlidesDirectly(e.target.files[0])
+                           }
+                         }}
+                       />
+                     </label>
+                   )}
+                 </div>
                  
                  {/* Re-process button */}
                  <div className="border-t border-slate-50 pt-3.5 mt-1">

@@ -429,38 +429,49 @@ export default function CourseDetailPage() {
           {course.name}
         </h1>
 
-        <div className="relative">
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowDropdown(!showDropdown)}
-            className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 hover:shadow-soft-sm transition-all duration-200 cursor-pointer"
+            onClick={() => setIsEditModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl border border-indigo-100 bg-indigo-50/80 text-indigo-700 hover:bg-indigo-100 font-extrabold text-xs transition-all cursor-pointer shadow-soft-xs"
           >
-            <MoreVertical className="w-5 h-5" />
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="hidden sm:inline">Modifica Info & Syllabus</span>
+            <span className="sm:hidden">Syllabus</span>
           </button>
 
-          {showDropdown && (
-            <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-soft-lg py-1.5 z-40 animate-in fade-in slide-in-from-top-2 duration-150">
-              <button
-                onClick={() => {
-                  setIsEditModalOpen(true)
-                  setShowDropdown(false)
-                }}
-                className="w-full text-left px-4 py-2.5 text-sm text-slate-750 hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer font-bold"
-              >
-                <Edit3 className="w-4 h-4 text-indigo-500" />
-                <span>{t('course.dropdown.edit')}</span>
-              </button>
-              <button
-                onClick={() => {
-                  handleDeleteCourse()
-                  setShowDropdown(false)
-                }}
-                className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-100 font-bold"
-              >
-                <Trash2 className="w-4 h-4 text-rose-500" />
-                <span>{t('course.dropdown.delete')}</span>
-              </button>
-            </div>
-          )}
+          <div className="relative">
+            <button
+              onClick={() => setShowDropdown(!showDropdown)}
+              className="inline-flex items-center justify-center p-2.5 rounded-2xl border border-slate-100 bg-white text-slate-500 hover:text-indigo-650 hover:border-indigo-100 hover:shadow-soft-sm transition-all duration-200 cursor-pointer"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+
+            {showDropdown && (
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-100 rounded-2xl shadow-soft-lg py-1.5 z-40 animate-in fade-in slide-in-from-top-2 duration-150">
+                <button
+                  onClick={() => {
+                    setIsEditModalOpen(true)
+                    setShowDropdown(false)
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-slate-750 hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer font-bold"
+                >
+                  <Edit3 className="w-4 h-4 text-indigo-500" />
+                  <span>{t('course.dropdown.edit')}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    handleDeleteCourse()
+                    setShowDropdown(false)
+                  }}
+                  className="w-full text-left px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50/50 transition-colors flex items-center gap-2 cursor-pointer border-t border-slate-100 font-bold"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-500" />
+                  <span>{t('course.dropdown.delete')}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -727,8 +738,8 @@ export default function CourseDetailPage() {
               </div>
             </div>
 
-            {/* Syllabus Roadmap Card (if configured) */}
-            {course.syllabus_topics && course.syllabus_topics.length > 0 && (
+            {/* Syllabus Roadmap Card */}
+            {course.syllabus_topics && course.syllabus_topics.length > 0 ? (
               <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-3.5 text-left">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -737,9 +748,12 @@ export default function CourseDetailPage() {
                       Syllabus & Programma
                     </h3>
                   </div>
-                  <span className="text-[10px] font-black text-slate-400">
-                    {course.syllabus_topics.length} Capitoli
-                  </span>
+                  <button
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="text-[10px] font-black text-indigo-600 hover:underline cursor-pointer"
+                  >
+                    Modifica
+                  </button>
                 </div>
 
                 <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
@@ -757,6 +771,27 @@ export default function CourseDetailPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            ) : (
+              <div className="bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/50 border border-indigo-100/90 p-6 rounded-3xl shadow-soft-sm flex flex-col items-center text-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center shadow-soft-xs">
+                  <BookOpen className="w-5 h-5" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider">
+                    Syllabus & Info Esame
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-semibold leading-relaxed max-w-[230px]">
+                    Incolla il programma del corso per estrarre con l'AI capitoli, date parziali e criteri d'esame.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="w-full bg-brand-gradient hover:opacity-95 text-white font-extrabold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer transition-all hover:scale-[1.01]"
+                >
+                  <Sparkles className="w-3.5 h-3.5 fill-white" />
+                  <span>Configura con AI</span>
+                </button>
               </div>
             )}
 
