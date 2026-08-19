@@ -2,7 +2,7 @@
 
 'use client'
 
-import { useState, useEffect, useRef, useTransition } from 'react'
+import { useState, useEffect, useRef, useTransition, Suspense } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import ReactMarkdown from 'react-markdown'
@@ -127,7 +127,7 @@ function NotRequestedPlaceholder({ moduleName, onGenerate, generating }: NotRequ
   )
 }
 
-export default function StudyHubPage() {
+function StudyHubContent() {
   const { t, language } = useLanguage()
   const params = useParams()
   const router = useRouter()
@@ -1845,5 +1845,20 @@ export default function StudyHubPage() {
 
   <BottomNav />
 </div>
+  )
+}
+
+export default function StudyHubPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+          <Loader2 className="w-8 h-8 text-indigo-650 animate-spin" />
+          <p className="text-slate-500 text-sm mt-2 font-semibold">Caricamento...</p>
+        </div>
+      }
+    >
+      <StudyHubContent />
+    </Suspense>
   )
 }
