@@ -143,44 +143,44 @@ export default function ExamModeModal({
     return Math.min(100, Math.max(0, score))
   }, [coveragePercent, flashcardRetentionPercent, lectures.length, totalSyllabusCount])
 
-  // 5. Determine Current Adaptive Study Phase based on days remaining
+  // 5. Determine Current Adaptive Study Phase based on realistic semester timeline (3-4 months)
   const currentPhase = useMemo(() => {
-    if (daysRemaining === null || daysRemaining > 14) {
+    if (daysRemaining === null || daysRemaining > 30) {
       return {
         number: 1,
-        name: 'Fase 1: Acquisizione & Lezioni in Aula',
-        badge: 'Acquisizione Progressiva',
-        desc: 'Segui le lezioni, registra l’audio e associa le slide del docente per coprire i moduli del syllabus.',
-        dailyTask: 'Registra la prossima lezione in aula + 10 Flashcard',
+        name: 'Fase 1: Semestre in Corso & Frequenza Settimanale',
+        badge: 'Frequenza & Acquisizione',
+        desc: 'Il semestre è in pieno svolgimento. Segui le lezioni in aula, registra l’audio e associa le slide del docente per coprire i moduli del syllabus.',
+        dailyTask: 'Segui la lezione in aula + 5 min ripasso flashcard entro 48h',
         accentColor: 'text-indigo-600 bg-indigo-50 border-indigo-200',
       }
     }
-    if (daysRemaining > 7) {
+    if (daysRemaining > 14) {
       return {
         number: 2,
-        name: 'Fase 2: Consolidamento & Recupero Debolezze',
-        badge: 'Recupero Punti Critici',
-        desc: 'L’esame si avvicina. È il momento di azzerare i concetti rossi e rafforzare la memoria a lungo termine.',
+        name: 'Fase 2: Consolidamento & Avvicinamento Tappa / Midterm',
+        badge: 'Consolidamento Memoria',
+        desc: 'Metà programma completato o prova intermedia in arrivo. È il momento di azzerare i concetti rossi e consolidare la memoria a lungo termine.',
         dailyTask: 'Sessione Recupero Errori (5 min) + Ripasso 15 Flashcard',
         accentColor: 'text-amber-600 bg-amber-50 border-amber-200',
       }
     }
-    if (daysRemaining > 1) {
+    if (daysRemaining > 2) {
       return {
         number: 3,
-        name: 'Fase 3: Sprint Finale & Simulazione Test',
+        name: 'Fase 3: Sprint Finale & Simulazione Test Globale',
         badge: 'Sprint Esame',
-        desc: 'Testa la tua velocità con i quiz completi su tutta la materia per allenare la prontezza d’esame.',
-        dailyTask: 'Banca Quiz del Corso (Test completo da 15-20 domande)',
+        desc: 'Le lezioni sono terminate. Testa la tua velocità con i quiz completi su tutta la materia per allenare la prontezza d’esame.',
+        dailyTask: 'Banca Quiz del Corso (Test completo da 15-20 domande a tempo)',
         accentColor: 'text-purple-600 bg-purple-50 border-purple-200',
       }
     }
     return {
       number: 4,
-      name: 'Fase 4: Vigilia dell’Esame (Giorno -1)',
-      badge: 'Fissaggio Mentale',
-      desc: 'Zero sovraccarico: fai una rapida rilettura dei punti chiave e un ripasso leggero di 10 flashcard.',
-      dailyTask: 'Rilettura Riassunti Chiave + 10 Flashcard rapide',
+      name: 'Fase 4: Rifinitura & Vigilia dell’Esame (Giorno -1)',
+      badge: 'Fissaggio Mentale & Zero Ansia',
+      desc: 'Zero sovraccarico: fai una rapida rilettura dei punti chiave e un ripasso leggero di 10 flashcard per arrivare all’appello lucido e sicuro.',
+      dailyTask: 'Rilettura Riassunti Chiave + 10 Flashcard di fissaggio finale',
       accentColor: 'text-emerald-600 bg-emerald-50 border-emerald-200',
     }
   }, [daysRemaining])
