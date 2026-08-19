@@ -9,6 +9,7 @@ import { createClient } from '@/utils/supabase/client'
 import CourseModal, { ScheduleItem, SyllabusTopic, ExamMilestone } from '@/components/CourseModal'
 import SyllabusModal from '@/components/SyllabusModal'
 import CourseArchiveModal from '@/components/CourseArchiveModal'
+import ConceptRecoveryModal from '@/components/ConceptRecoveryModal'
 import BottomNav from '@/components/BottomNav'
 import Toast from '@/components/Toast'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
@@ -81,6 +82,7 @@ export default function CourseDetailPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isSyllabusModalOpen, setIsSyllabusModalOpen] = useState(false)
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false)
+  const [isConceptModalOpen, setIsConceptModalOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info')
   const [error, setError] = useState<string | null>(null)
@@ -866,6 +868,17 @@ export default function CourseDetailPage() {
                     {masteryStats.completedLectures}/{lectures.length}
                   </span>
                 </div>
+
+                <button
+                  onClick={() => setIsConceptModalOpen(true)}
+                  className="w-full mt-2 py-2.5 px-3.5 rounded-2xl bg-indigo-50/80 hover:bg-indigo-100/90 border border-indigo-100 text-indigo-700 font-black text-xs flex items-center justify-between transition-all cursor-pointer group shadow-2xs"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Mappa Competenze & Errori</span>
+                  </span>
+                  <ChevronRight className="w-3.5 h-3.5 text-indigo-500 group-hover:translate-x-0.5 transition-transform" />
+                </button>
               </div>
             </div>
 
@@ -927,6 +940,16 @@ export default function CourseDetailPage() {
         courseName={course.name}
         courseColor={course.color}
         onUpdateMastery={fetchCourseAndLectures}
+      />
+
+      {/* Concept Recovery & Weakness Map Modal */}
+      <ConceptRecoveryModal
+        isOpen={isConceptModalOpen}
+        onClose={() => setIsConceptModalOpen(false)}
+        courseId={course.id}
+        courseName={course.name}
+        courseColor={course.color}
+        onMasteryUpdated={fetchCourseAndLectures}
       />
 
       {/* Course Edit/Create Modal */}

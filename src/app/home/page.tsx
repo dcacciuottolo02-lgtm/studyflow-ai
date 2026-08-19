@@ -13,6 +13,7 @@ import {
   TodayTaskItem,
 } from '@/utils/studyStats'
 import CourseModal, { ScheduleItem, SyllabusTopic } from '@/components/CourseModal'
+import ConceptRecoveryModal from '@/components/ConceptRecoveryModal'
 import BottomNav from '@/components/BottomNav'
 import {
   Plus,
@@ -61,6 +62,7 @@ export default function HomePage() {
   const [queueItems, setQueueItems] = useState<TodayTaskItem[]>([])
   const [weakCardsCount, setWeakCardsCount] = useState<number>(0)
   const [weakLectureId, setWeakLectureId] = useState<string | null>(null)
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false)
 
   // Academic stats state
   const [stats, setStats] = useState<UserStudyStats>({
@@ -565,13 +567,13 @@ export default function HomePage() {
                   </div>
                 </div>
 
-                <Link
-                  href={`/lecture/${weakLectureId}?tab=flashcards`}
+                <button
+                  onClick={() => setIsRecoveryModalOpen(true)}
                   className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold px-4 py-2 rounded-xl text-xs transition-all cursor-pointer shadow-sm shrink-0 self-start sm:self-auto"
                 >
                   <span>{t('home.today.weak.action')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
+                </button>
               </div>
             )}
 
@@ -706,6 +708,13 @@ export default function HomePage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchDashboardData}
+      />
+
+      {/* Global Concept Recovery & Weakness Map Modal */}
+      <ConceptRecoveryModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        onMasteryUpdated={fetchDashboardData}
       />
 
       {/* Navigation tabs */}
