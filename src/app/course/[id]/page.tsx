@@ -677,10 +677,10 @@ export default function CourseDetailPage() {
               </div>
 
               {/* Exam countdown & Milestones (Midterms + Final) */}
-              {course.exam_milestones && course.exam_milestones.length > 0 ? (
+              {Array.isArray(course.exam_milestones) && course.exam_milestones.length > 0 ? (
                 <div className="flex flex-col gap-2">
                   {course.exam_milestones.map((m) => {
-                    if (!m.date) return null
+                    if (!m?.date || isNaN(new Date(m.date).getTime())) return null
                     const days = Math.ceil(
                       (new Date(m.date).getTime() - new Date().setHours(0, 0, 0, 0)) /
                         (1000 * 60 * 60 * 24)

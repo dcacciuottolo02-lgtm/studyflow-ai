@@ -616,7 +616,7 @@ function RecordLectureContent() {
       </div>
 
       {/* Syllabus Topic Selector (if course has syllabus topics) */}
-      {course?.syllabus_topics && course.syllabus_topics.length > 0 && (
+      {Array.isArray(course?.syllabus_topics) && course.syllabus_topics.length > 0 && (
         <div className="flex flex-col gap-1.5 pl-0.5">
           <label className="text-[10px] font-extrabold text-slate-455 uppercase tracking-widest flex items-center gap-1">
             <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
@@ -630,8 +630,8 @@ function RecordLectureContent() {
           >
             <option value="">Nessun capitolo specifico</option>
             {course.syllabus_topics.map((t, idx) => (
-              <option key={t.id} value={t.id}>
-                {idx + 1}. {t.title}
+              <option key={t?.id || idx} value={t?.id || ''}>
+                {idx + 1}. {t?.title || `Modulo ${idx + 1}`}
               </option>
             ))}
           </select>
