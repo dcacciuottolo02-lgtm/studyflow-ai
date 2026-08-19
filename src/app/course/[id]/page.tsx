@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/utils/supabase/client'
 import CourseModal, { ScheduleItem, SyllabusTopic, ExamMilestone } from '@/components/CourseModal'
+import SyllabusModal from '@/components/SyllabusModal'
 import BottomNav from '@/components/BottomNav'
 import Toast from '@/components/Toast'
 import { checkUsageStatus, UsageStatus } from '@/utils/lectureUsage'
@@ -31,6 +32,7 @@ import {
   Flame,
   BookOpen,
   BookmarkCheck,
+  ChevronRight,
 } from 'lucide-react'
 
 interface Course {
@@ -76,6 +78,7 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true)
   const [showDropdown, setShowDropdown] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [isSyllabusModalOpen, setIsSyllabusModalOpen] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('info')
   const [error, setError] = useState<string | null>(null)
@@ -738,96 +741,33 @@ export default function CourseDetailPage() {
               </div>
             </div>
 
-            {/* Syllabus Roadmap Card */}
-            {course.syllabus_topics && course.syllabus_topics.length > 0 ? (
-              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-3.5 text-left">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <BookOpen className="w-4 h-4 text-indigo-600" />
-                    <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest">
-                      Syllabus & Programma
-                    </h3>
-                  </div>
-                  <button
-                    onClick={() => setIsEditModalOpen(true)}
-                    className="text-[10px] font-black text-indigo-600 hover:underline cursor-pointer"
-                  >
-                    Modifica
-                  </button>
-                </div>
-
-                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
-                  {course.syllabus_topics.map((topic, idx) => (
-                    <div
-                      key={topic.id}
-                      className="bg-slate-50 border border-slate-200/60 p-2.5 rounded-xl flex items-center justify-between text-xs"
-                    >
-                      <span className="font-bold text-slate-700 truncate max-w-[200px]">
-                        {idx + 1}. {topic.title}
-                      </span>
-                      <span className="text-[9px] px-2 py-0.5 bg-white border border-slate-200 text-slate-500 rounded-lg font-extrabold">
-                        Modulo
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/50 border border-indigo-100/90 p-6 rounded-3xl shadow-soft-sm flex flex-col items-center text-center gap-3.5">
-                <div className="w-11 h-11 rounded-2xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center shadow-soft-xs">
+            {/* Syllabus & Exam Info Pop-up Trigger Button */}
+            <button
+              onClick={() => setIsSyllabusModalOpen(true)}
+              className="w-full bg-white hover:bg-slate-50/90 border border-slate-100 p-5 rounded-3xl shadow-soft-sm flex items-center justify-between gap-4 transition-all duration-200 hover:border-indigo-200 group cursor-pointer text-left hover:scale-[1.01]"
+            >
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100/60 flex items-center justify-center text-indigo-600 group-hover:bg-brand-gradient group-hover:text-white transition-all shadow-soft-xs shrink-0">
                   <BookOpen className="w-5 h-5" />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <h4 className="text-xs font-black text-slate-850 uppercase tracking-wider">
-                    Syllabus & Info Esame
-                  </h4>
-                  <p className="text-[11px] text-slate-500 font-semibold leading-relaxed max-w-[230px]">
-                    Incolla il programma del corso per estrarre con l'AI capitoli, date parziali e criteri d'esame.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsEditModalOpen(true)}
-                  className="w-full bg-brand-gradient hover:opacity-95 text-white font-extrabold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-sm shadow-indigo-100 cursor-pointer transition-all hover:scale-[1.01]"
-                >
-                  <Sparkles className="w-3.5 h-3.5 fill-white" />
-                  <span>Configura con AI</span>
-                </button>
-              </div>
-            )}
-
-            {/* Grading Policy & Materials Card (if extracted/set) */}
-            {(course.grading_policy || course.materials_info) && (
-              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-3.5 text-left">
-                <div className="flex items-center gap-2">
-                  <BookmarkCheck className="w-4 h-4 text-indigo-600" />
-                  <h3 className="font-extrabold text-xs text-slate-850 uppercase tracking-widest">
-                    Info Esame & Valutazione
-                  </h3>
-                </div>
-
-                {course.grading_policy && (
-                  <div className="flex flex-col gap-1 bg-slate-50 border border-slate-150/60 p-3 rounded-2xl">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                      Criteri di Valutazione
+                <div className="flex flex-col min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-extrabold text-slate-900 group-hover:text-indigo-650 transition-colors truncate">
+                      Syllabus & Info Esame
                     </span>
-                    <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                      {course.grading_policy}
-                    </p>
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                   </div>
-                )}
-
-                {course.materials_info && (
-                  <div className="flex flex-col gap-1 bg-slate-50 border border-slate-150/60 p-3 rounded-2xl">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                      Materiali & Libri Consigliati
-                    </span>
-                    <p className="text-xs text-slate-700 font-semibold leading-relaxed">
-                      {course.materials_info}
-                    </p>
-                  </div>
-                )}
+                  <span className="text-xs text-slate-400 font-semibold truncate mt-0.5">
+                    {course.syllabus_topics && course.syllabus_topics.length > 0
+                      ? `${course.syllabus_topics.length} moduli • Criteri e materiali`
+                      : 'Apri programma e dettagli'}
+                  </span>
+                </div>
               </div>
-            )}
+              <div className="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:text-indigo-600 group-hover:bg-indigo-50 transition-all shrink-0">
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
 
             {/* Course Academic Mastery Card */}
             <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-soft-sm flex flex-col gap-4 text-left">
@@ -928,6 +868,23 @@ export default function CourseDetailPage() {
         </div>
       </main>
 
+      {/* Pop-up Syllabus & Course Data Modal */}
+      <SyllabusModal
+        isOpen={isSyllabusModalOpen}
+        onClose={() => setIsSyllabusModalOpen(false)}
+        onOpenEdit={() => setIsEditModalOpen(true)}
+        courseName={course.name}
+        courseColor={course.color}
+        professor={course.professor}
+        cfu={course.cfu}
+        syllabusTopics={course.syllabus_topics}
+        examMilestones={course.exam_milestones}
+        examDate={course.exam_date}
+        gradingPolicy={course.grading_policy}
+        materialsInfo={course.materials_info}
+      />
+
+      {/* Course Edit/Create Modal */}
       <CourseModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
