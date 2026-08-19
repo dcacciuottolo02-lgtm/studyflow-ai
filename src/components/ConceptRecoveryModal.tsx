@@ -579,8 +579,8 @@ export default function ConceptRecoveryModal({
                     <span>Carta {recoveryIndex + 1} di {weakCards.length}</span>
                   </div>
 
-                  {/* Swipe Guidance Helper */}
-                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 px-1">
+                  {/* Swipe Guidance Helper (Mobile Only) */}
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 px-1 sm:hidden">
                     <span className="text-slate-500">👈 Swipe Sx = Salta</span>
                     <span className="text-emerald-600">Swipe Dx = Capito! 👉</span>
                   </div>

@@ -1631,16 +1631,12 @@ function StudyHubContent() {
                     </div>
                   </div>
 
-                  {/* Sleek Swipe & Keyboard Guide Banner */}
-                  <div className="flex items-center justify-between w-full max-w-lg px-1 relative z-10">
+                  {/* Sleek Swipe Guide Banner (Mobile Only) */}
+                  <div className="flex items-center justify-between w-full max-w-lg px-1 relative z-10 sm:hidden">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-rose-200/80 text-rose-600 font-black text-[10px] shadow-2xs">
                       <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
                       <span>Swipe Sx = Da Rivedere</span>
                     </div>
-
-                    <span className="text-[10px] text-slate-400 font-bold hidden sm:inline">
-                      Scorciatoie: <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9px]">←</kbd> <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9px]">Spazio</kbd> <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 rounded text-[9px]">→</kbd>
-                    </span>
 
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-emerald-200/80 text-emerald-700 font-black text-[10px] shadow-2xs">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
